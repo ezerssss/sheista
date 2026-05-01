@@ -1,0 +1,150 @@
+[
+  {
+    "name": "Brute Force",
+    "value": "brute force"
+  },
+  {
+    "name": "Math",
+    "value": "math"
+  },
+  {
+    "name": "Combinatorics",
+    "value": "combinatorics"
+  },
+  {
+    "name": "Constructives",
+    "value": "constructives"
+  },
+  {
+    "name": "Probabilities",
+    "value": "probabilities"
+  },
+  {
+    "name": "Graphs",
+    "value": "graphs"
+  },
+  {
+    "name": "Sortings",
+    "value": "sortings"
+  },
+  {
+    "name": "Bitmasks",
+    "value": "bitmasks"
+  },
+  {
+    "name": "Data Structures",
+    "value": "data structures"
+  },
+  {
+    "name": "Implementation",
+    "value": "implementation"
+  },
+  {
+    "name": "Trees",
+    "value": "trees"
+  },
+  {
+    "name": "Number Theory",
+    "value": "number theory"
+  },
+  {
+    "name": "Binary Search",
+    "value": "binary search"
+  },
+  {
+    "name": "Ternary Search",
+    "value": "ternary search"
+  },
+  {
+    "name": "Two Pointers",
+    "value": "two pointers"
+  },
+  {
+    "name": "Divide and Conquer",
+    "value": "divide and conquer"
+  },
+  {
+    "name": "Dynamic Programming",
+    "value": "dp"
+  },
+  {
+    "name": "Geometry",
+    "value": "geometry"
+  },
+  {
+    "name": "Interactive",
+    "value": "interactive"
+  },
+  {
+    "name": "Greedy",
+    "value": "greedy"
+  },
+  {
+    "name": "DFS and Similar",
+    "value": "dfs and similar"
+  },
+  {
+    "name": "Shortest Paths",
+    "value": "shortest paths"
+  },
+  {
+    "name": "DSU",
+    "value": "dsu"
+  },
+  {
+    "name": "Games",
+    "value": "games"
+  },
+  {
+    "name": "Strings",
+    "value": "strings"
+  },
+  {
+    "name": "Hashing",
+    "value": "hashing"
+  },
+  {
+    "name": "2-SAT",
+    "value": "2-sat"
+  },
+  {
+    "name": "Chinese Remainder Theorem",
+    "value": "chinese remainder theorem"
+  },
+  {
+    "name": "Constructive Algorithms",
+    "value": "constructive algorithms"
+  },
+  {
+    "name": "Expression Parsing",
+    "value": "expression parsing"
+  },
+  {
+    "name": "FFT",
+    "value": "fft"
+  },
+  {
+    "name": "Flows",
+    "value": "flows"
+  },
+  {
+    "name": "Graph Matchings",
+    "value": "graph matchings"
+  },
+  {
+    "name": "Matrices",
+    "value": "matrices"
+  },
+  {
+    "name": "Meet-in-the-Middle",
+    "value": "meet-in-the-middle"
+  },
+  {
+    "name": "Schedules",
+    "value": "schedules"
+  },
+  {
+    "name": "String Suffix Structures",
+    "value": "string suffix structures"
+  }
+]
