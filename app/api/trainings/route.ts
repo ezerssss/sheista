@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { clampLevel } from "@/lib/themecp/levels";
+import { fetchSolvedProblems } from "@/lib/codeforces/api";
 
 const ProblemSchema = z.object({
   slot: z.number().int().min(1).max(4),
@@ -35,6 +36,45 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "Bad input", details: parsed.error.format() }, { status: 400 });
   }
   const body = parsed.data;
+
+  // Upsolve gate: refuse to record a new round if the previous round's easiest
+  // unsolved problem is still unsolved on Codeforces. Mirrors the client gate.
+  type PrevProblem = { contest_id: number; problem_index: string; rating: number; solved_at: string | null };
+  const { data: prevTrainings } = await supabase
+    .from("trainings")
+    .select("training_problems(contest_id, problem_index, rating, solved_at)")
+    .eq("user_id", user.id)
+    .order("started_at", { ascending: false })
+    .limit(1);
+
+  const prev = prevTrainings?.[0] as { training_problems?: PrevProblem[] } | undefined;
+  const prevUnsolved: PrevProblem[] = (prev?.training_problems ?? []).filter((p) => !p.solved_at);
+  if (prevUnsolved.length > 0) {
+    const easiest = prevUnsolved.reduce(
+      (min, p) => (p.rating < min.rating ? p : min),
+      prevUnsolved[0],
+    );
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("cf_handle")
+      .eq("id", user.id)
+      .single();
+    if (profile?.cf_handle) {
+      const cfSolved = await fetchSolvedProblems(profile.cf_handle);
+      const isUpsolved = cfSolved.some(
+        (cf) => cf.contestId === easiest.contest_id && cf.index === easiest.problem_index,
+      );
+      if (!isUpsolved) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: `Upsolve ${easiest.contest_id}${easiest.problem_index} (rating ${easiest.rating}) before logging another round.`,
+          },
+          { status: 403 },
+        );
+      }
+    }
+  }
 
   const newLevel = clampLevel(body.level_at_start + (body.is_ak ? 1 : -1));
 

@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ProgressLineChart, LevelLineChart } from "@/components/ProgressLineChart";
 import { createClient } from "@/lib/supabase/server";
@@ -48,80 +47,132 @@ export default async function HistoryPage() {
     }));
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold">History</h1>
+    <div className="space-y-12">
+      <header className="space-y-2">
+        <p className="label-eyebrow">History</p>
+        <h1 className="text-3xl font-semibold tracking-tight">Rounds &amp; progress</h1>
+        <p className="text-sm text-muted-foreground">
+          {list.length} round{list.length === 1 ? "" : "s"} · the ladder shifts ±1 per round.
+        </p>
+      </header>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Performance</CardTitle>
-            <CardDescription>Round performance over time.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {chartData.length > 0 ? (
-              <ProgressLineChart data={chartData} />
-            ) : (
-              <p className="text-sm text-muted-foreground">No rounds yet.</p>
-            )}
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Level</CardTitle>
-            <CardDescription>Self-balancing ladder ±1 per round.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {chartData.length > 0 ? (
-              <LevelLineChart data={chartData} />
-            ) : (
-              <p className="text-sm text-muted-foreground">No rounds yet.</p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+      <section className="grid gap-6 md:grid-cols-2">
+        <ChartCard
+          title="Performance"
+          subtitle="Per-round perf over time"
+          empty={chartData.length === 0}
+        >
+          <ProgressLineChart data={chartData} />
+        </ChartCard>
+        <ChartCard
+          title="Level"
+          subtitle="Self-balancing ladder"
+          empty={chartData.length === 0}
+        >
+          <LevelLineChart data={chartData} />
+        </ChartCard>
+      </section>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Rounds</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {list.length === 0 && <p className="text-sm text-muted-foreground">No rounds yet.</p>}
-          {list.map((t) => (
-            <div key={t.id} className="rounded-md border p-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant={t.is_ak ? "default" : "secondary"}>{t.is_ak ? "AK" : "no AK"}</Badge>
-                  <span className="text-sm">
-                    Level {t.level_at_start} → {t.level_at_end}
+      <section className="space-y-4">
+        <h2 className="text-base font-semibold tracking-tight">All rounds</h2>
+        {list.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-border p-10 text-center">
+            <p className="text-sm text-muted-foreground">No rounds yet.</p>
+          </div>
+        ) : (
+          <div className="overflow-hidden rounded-lg border border-border">
+            {list.map((t, idx) => (
+              <div
+                key={t.id}
+                className={`px-5 py-4 ${idx > 0 ? "border-t border-border" : ""}`}
+              >
+                <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                  <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                    <Badge variant={t.is_ak ? "accent" : "muted"}>
+                      {t.is_ak ? "AK" : "no AK"}
+                    </Badge>
+                    <span className="text-sm">
+                      Level{" "}
+                      <span className="font-mono">{t.level_at_start}</span>
+                      <span className="mx-1 text-muted-foreground">→</span>
+                      <span className="font-mono">{t.level_at_end}</span>
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      perf <span className="font-mono text-foreground">{t.performance}</span>
+                    </span>
+                    {t.tag_filter && t.tag_filter.length > 0 && (
+                      <span className="text-xs text-muted-foreground">
+                        {t.tag_filter.map((tag) => `#${tag}`).join(" ")}
+                      </span>
+                    )}
+                  </div>
+                  <span className="font-mono text-xs text-muted-foreground">
+                    {new Date(t.finished_at).toLocaleString(undefined, {
+                      year: "numeric",
+                      month: "short",
+                      day: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
                   </span>
-                  <span className="text-sm text-muted-foreground">perf {t.performance}</span>
-                  {t.tag_filter && t.tag_filter.length > 0 && (
-                    <span className="text-xs text-muted-foreground">{t.tag_filter.join(", ")}</span>
-                  )}
                 </div>
-                <span className="text-xs text-muted-foreground">{new Date(t.finished_at).toLocaleString()}</span>
+                <div className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
+                  {[...t.training_problems]
+                    .sort((a, b) => a.slot - b.slot)
+                    .map((p) => (
+                      <Link
+                        key={p.slot}
+                        href={`https://codeforces.com/contest/${p.contest_id}/problem/${p.problem_index}`}
+                        target="_blank"
+                        className={`flex min-w-0 items-center gap-1.5 truncate text-xs hover:underline ${
+                          p.solved_at ? "text-accent" : "text-muted-foreground"
+                        }`}
+                        title={`${p.contest_id}${p.problem_index} ${p.problem_name}`}
+                      >
+                        <span
+                          className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${
+                            p.solved_at ? "bg-accent" : "bg-muted-foreground/40"
+                          }`}
+                        />
+                        <span className="font-mono">
+                          {p.contest_id}
+                          {p.problem_index}
+                        </span>
+                        <span className="text-muted-foreground">({p.rating})</span>
+                      </Link>
+                    ))}
+                </div>
               </div>
-              <div className="mt-2 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
-                {[...t.training_problems]
-                  .sort((a, b) => a.slot - b.slot)
-                  .map((p) => (
-                    <Link
-                      key={p.slot}
-                      href={`https://codeforces.com/contest/${p.contest_id}/problem/${p.problem_index}`}
-                      target="_blank"
-                      className={`truncate hover:underline ${p.solved_at ? "text-green-500" : "text-muted-foreground"}`}
-                      title={`${p.contest_id}${p.problem_index} ${p.problem_name}`}
-                    >
-                      {p.solved_at ? "✓ " : "· "}
-                      {p.contest_id}
-                      {p.problem_index} ({p.rating})
-                    </Link>
-                  ))}
-              </div>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+            ))}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function ChartCard({
+  title,
+  subtitle,
+  empty,
+  children,
+}: {
+  title: string;
+  subtitle: string;
+  empty: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-4 rounded-lg border border-border p-6">
+      <div className="space-y-1">
+        <h3 className="text-sm font-semibold tracking-tight">{title}</h3>
+        <p className="text-xs text-muted-foreground">{subtitle}</p>
+      </div>
+      {empty ? (
+        <p className="py-12 text-center text-sm text-muted-foreground">No rounds yet.</p>
+      ) : (
+        children
+      )}
     </div>
   );
 }

@@ -1,8 +1,7 @@
 "use client";
 
 import { allTags } from "@/lib/themecp/tags";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 export function TagSelector({
   selected,
@@ -18,23 +17,42 @@ export function TagSelector({
   const tags = allTags();
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm font-medium">Theme</span>
-        <Button variant="ghost" size="sm" onClick={onRandom}>
-          Random
-        </Button>
-        <Button variant="ghost" size="sm" onClick={onClear}>
-          Clear (no theme)
-        </Button>
+      <div className="flex items-center justify-between">
+        <p className="label-eyebrow">Theme</p>
+        <div className="flex items-center gap-3 text-xs">
+          <button
+            type="button"
+            onClick={onRandom}
+            className="text-muted-foreground transition-colors hover:text-foreground"
+          >
+            Random
+          </button>
+          <span className="text-border">·</span>
+          <button
+            type="button"
+            onClick={onClear}
+            className="text-muted-foreground transition-colors hover:text-foreground"
+          >
+            Clear
+          </button>
+        </div>
       </div>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-1.5">
         {tags.map((t) => {
           const on = selected.includes(t.value);
           return (
-            <button key={t.value} onClick={() => onToggle(t.value)} type="button">
-              <Badge variant={on ? "default" : "outline"} className="cursor-pointer">
-                {t.name}
-              </Badge>
+            <button
+              key={t.value}
+              type="button"
+              onClick={() => onToggle(t.value)}
+              className={cn(
+                "rounded-full border px-2.5 py-1 text-xs transition-colors",
+                on
+                  ? "border-foreground bg-foreground text-background"
+                  : "border-border text-muted-foreground hover:border-foreground/50 hover:text-foreground",
+              )}
+            >
+              {t.name}
             </button>
           );
         })}

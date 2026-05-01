@@ -6,10 +6,17 @@ const config: Config = {
   theme: {
     container: {
       center: true,
-      padding: "1rem",
-      screens: { "2xl": "1280px" },
+      padding: "1.5rem",
+      screens: { "2xl": "1200px" },
     },
     extend: {
+      fontFamily: {
+        sans: ["var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
+        mono: ["var(--font-mono)", "ui-monospace", "SFMono-Regular", "monospace"],
+      },
+      letterSpacing: {
+        tightest: "-0.04em",
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -39,6 +46,10 @@ const config: Config = {
         card: {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
+        },
+        popover: {
+          DEFAULT: "hsl(var(--popover))",
+          foreground: "hsl(var(--popover-foreground))",
         },
       },
       borderRadius: {

@@ -25,7 +25,12 @@ export function CountdownTimer({
 
   if (now < startTime) {
     const sec = Math.max(0, Math.ceil((startTime - now) / 1000));
-    return <span className="font-mono text-sm">Starts in {sec}s</span>;
+    return (
+      <div className="inline-flex items-baseline gap-2">
+        <span className="label-eyebrow">starts in</span>
+        <span className="font-mono text-2xl font-light tabular-nums">{sec}s</span>
+      </div>
+    );
   }
 
   const remaining = Math.max(0, endTime - now);
@@ -33,7 +38,14 @@ export function CountdownTimer({
   const s = Math.floor((remaining % 60000) / 1000);
   const hh = Math.floor(m / 60);
   const mm = m % 60;
-  const txt = hh > 0 ? `${hh}:${String(mm).padStart(2, "0")}:${String(s).padStart(2, "0")}` : `${mm}:${String(s).padStart(2, "0")}`;
+  const txt = hh > 0
+    ? `${hh}:${String(mm).padStart(2, "0")}:${String(s).padStart(2, "0")}`
+    : `${mm}:${String(s).padStart(2, "0")}`;
 
-  return <span className="font-mono text-2xl tabular-nums">{txt}</span>;
+  return (
+    <div className="inline-flex items-baseline gap-2">
+      <span className="label-eyebrow">remaining</span>
+      <span className="font-mono text-3xl font-light tabular-nums tracking-tightest">{txt}</span>
+    </div>
+  );
 }

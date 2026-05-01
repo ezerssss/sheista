@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { RefreshCw, X } from "lucide-react";
+import { RefreshCw, X, Check } from "lucide-react";
 
 type Item = {
   contest_id: number;
@@ -37,10 +37,13 @@ export function UpsolveList() {
   };
 
   const remove = async (it: Item) => {
-    await fetch(`/api/upsolve?contestId=${it.contest_id}&index=${encodeURIComponent(it.problem_index)}`, {
-      method: "DELETE",
-    });
-    setItems((prev) => prev.filter((p) => p.contest_id !== it.contest_id || p.problem_index !== it.problem_index));
+    await fetch(
+      `/api/upsolve?contestId=${it.contest_id}&index=${encodeURIComponent(it.problem_index)}`,
+      { method: "DELETE" },
+    );
+    setItems((prev) =>
+      prev.filter((p) => p.contest_id !== it.contest_id || p.problem_index !== it.problem_index),
+    );
   };
 
   useEffect(() => {
@@ -51,69 +54,118 @@ export function UpsolveList() {
   const done = items.filter((i) => i.solved_at);
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold">Upsolve queue</h2>
-        <Button variant="outline" size="sm" onClick={refreshFromCF} disabled={refreshing}>
-          <RefreshCw className="h-4 w-4" /> {refreshing ? "Checking…" : "Sync from CF"}
+    <div className="space-y-12">
+      <header className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
+        <div className="space-y-2">
+          <p className="label-eyebrow">Upsolve</p>
+          <h1 className="text-3xl font-semibold tracking-tight">Failed problems</h1>
+          <p className="text-sm text-muted-foreground">
+            Problems you didn&apos;t solve land here. Sync with CF to mark them solved.
+          </p>
+        </div>
+        <Button variant="outline" onClick={refreshFromCF} disabled={refreshing}>
+          <RefreshCw className="h-3.5 w-3.5" />
+          {refreshing ? "Checking…" : "Sync from CF"}
         </Button>
-      </div>
+      </header>
 
       {loading ? (
         <p className="text-sm text-muted-foreground">Loading…</p>
       ) : open.length === 0 && done.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          Nothing to upsolve — failed problems land here automatically when you don&apos;t AK a round.
-        </p>
+        <div className="rounded-lg border border-dashed border-border p-10 text-center">
+          <p className="text-sm text-muted-foreground">
+            Nothing to upsolve — failed problems land here automatically when you don&apos;t AK a round.
+          </p>
+        </div>
       ) : (
-        <>
+        <div className="space-y-10">
           {open.length > 0 && (
-            <section className="space-y-2">
-              <h3 className="text-sm font-medium text-muted-foreground">{open.length} open</h3>
+            <Section title="Open" count={open.length}>
               {open.map((it) => (
-                <ProblemRow key={`${it.contest_id}-${it.problem_index}`} it={it} onRemove={remove} />
+                <ProblemRow
+                  key={`${it.contest_id}-${it.problem_index}`}
+                  it={it}
+                  onRemove={remove}
+                />
               ))}
-            </section>
+            </Section>
           )}
           {done.length > 0 && (
-            <section className="space-y-2">
-              <h3 className="text-sm font-medium text-muted-foreground">{done.length} solved</h3>
+            <Section title="Solved" count={done.length}>
               {done.map((it) => (
-                <ProblemRow key={`${it.contest_id}-${it.problem_index}`} it={it} onRemove={remove} />
+                <ProblemRow
+                  key={`${it.contest_id}-${it.problem_index}`}
+                  it={it}
+                  onRemove={remove}
+                />
               ))}
-            </section>
+            </Section>
           )}
-        </>
+        </div>
       )}
     </div>
   );
 }
 
+function Section({
+  title,
+  count,
+  children,
+}: {
+  title: string;
+  count: number;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="space-y-3">
+      <div className="flex items-baseline justify-between">
+        <h2 className="text-base font-semibold tracking-tight">{title}</h2>
+        <span className="font-mono text-xs text-muted-foreground">{count}</span>
+      </div>
+      <div className="overflow-hidden rounded-lg border border-border">{children}</div>
+    </section>
+  );
+}
+
 function ProblemRow({ it, onRemove }: { it: Item; onRemove: (it: Item) => void }) {
   return (
-    <div className="flex flex-col gap-2 rounded-md border p-3 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex flex-col gap-1">
-        <div className="flex items-center gap-2">
-          {it.rating && <Badge variant="outline">{it.rating}</Badge>}
+    <div className="flex flex-col gap-2 border-t border-border px-5 py-4 first:border-t-0 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-1.5">
+        <div className="flex flex-wrap items-center gap-3">
+          {it.solved_at ? (
+            <span className="inline-flex items-center gap-1.5 text-xs text-accent">
+              <Check className="h-3.5 w-3.5" />
+            </span>
+          ) : (
+            <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />
+          )}
+          {it.rating && (
+            <span className="font-mono text-xs text-muted-foreground">{it.rating}</span>
+          )}
           <Link
             href={`https://codeforces.com/contest/${it.contest_id}/problem/${it.problem_index}`}
             target="_blank"
-            className="text-sm font-medium text-primary hover:underline"
+            className="text-sm font-medium underline-offset-4 hover:underline"
           >
-            {it.contest_id}{it.problem_index} · {it.problem_name || "Problem"}
+            <span className="font-mono text-muted-foreground">
+              {it.contest_id}
+              {it.problem_index}
+            </span>{" "}
+            {it.problem_name || "Problem"}
           </Link>
-          {it.solved_at && <Badge>solved</Badge>}
+          {it.solved_at && <Badge variant="accent">solved</Badge>}
         </div>
-        <div className="flex flex-wrap gap-1 text-xs text-muted-foreground">
-          {it.tags.map((t) => (
-            <span key={t} className="rounded bg-secondary px-1.5 py-0.5">
-              {t}
-            </span>
-          ))}
-        </div>
+        {it.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1.5 pl-6 text-[11px] text-muted-foreground">
+            {it.tags.map((t) => (
+              <span key={t}>#{t}</span>
+            ))}
+          </div>
+        )}
       </div>
       <Button variant="ghost" size="sm" onClick={() => onRemove(it)}>
-        <X className="h-4 w-4" /> Remove
+        <X className="h-3.5 w-3.5" />
+        Remove
       </Button>
     </div>
   );

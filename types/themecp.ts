@@ -9,7 +9,7 @@ export type Level = {
   P4: string;
 };
 
-export type Tag = { name: string; value: string };
+export type Tag = { name: string; value: string; weight: number };
 
 export type CodeforcesProblem = {
   contestId: number;

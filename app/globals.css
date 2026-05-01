@@ -5,64 +5,163 @@
 @layer base {
   :root {
     --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    --foreground: 0 0% 9%;
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 0 0% 9%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 221.2 83.2% 53.3%;
-    --radius: 0.5rem;
+    --popover-foreground: 0 0% 9%;
+    --primary: 0 0% 9%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 0 0% 9%;
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 45%;
+    --accent: 142 55% 36%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 70% 45%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 92%;
+    --input: 0 0% 88%;
+    --ring: 0 0% 9%;
+    --radius: 0.375rem;
   }
 
   .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 224.3 76.3% 48%;
+    --background: 0 0% 7%;
+    --foreground: 0 0% 96%;
+    --card: 0 0% 7%;
+    --card-foreground: 0 0% 96%;
+    --popover: 0 0% 9%;
+    --popover-foreground: 0 0% 96%;
+    --primary: 0 0% 96%;
+    --primary-foreground: 0 0% 9%;
+    --secondary: 0 0% 13%;
+    --secondary-foreground: 0 0% 96%;
+    --muted: 0 0% 13%;
+    --muted-foreground: 0 0% 60%;
+    --accent: 142 50% 45%;
+    --accent-foreground: 0 0% 9%;
+    --destructive: 0 60% 50%;
+    --destructive-foreground: 0 0% 96%;
+    --border: 0 0% 16%;
+    --input: 0 0% 18%;
+    --ring: 0 0% 96%;
   }
 }
 
 @layer base {
   * { @apply border-border; }
+  html { @apply bg-background; }
   body { @apply bg-background text-foreground; }
+  ::selection { background: hsl(var(--foreground) / 0.15); }
 }
 
-/* react-calendar-heatmap overrides */
-.react-calendar-heatmap text { fill: hsl(var(--muted-foreground)); font-size: 8px; }
-.react-calendar-heatmap .color-empty { fill: hsl(var(--muted)); }
-.react-calendar-heatmap .color-scale-1 { fill: #c6e48b; }
-.react-calendar-heatmap .color-scale-2 { fill: #7bc96f; }
-.react-calendar-heatmap .color-scale-3 { fill: #239a3b; }
-.react-calendar-heatmap .color-scale-4 { fill: #196127; }
-.dark .react-calendar-heatmap .color-empty { fill: hsl(var(--secondary)); }
+@layer utilities {
+  .text-balance { text-wrap: balance; }
+  .text-pretty { text-wrap: pretty; }
+  .label-eyebrow {
+    @apply text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground;
+  }
+}
+
+*:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px hsl(var(--background)), 0 0 0 3px hsl(var(--ring) / 0.4);
+  border-radius: var(--radius);
+}
+
+/* react-calendar-heatmap — fills container width, GitHub-style green */
+.react-calendar-heatmap {
+  display: block;
+  width: 100%;
+  height: auto;
+  vertical-align: top;
+  font-family: inherit;
+  overflow: visible;
+}
+.react-calendar-heatmap text {
+  fill: hsl(var(--muted-foreground));
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  font-size: 5px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.react-calendar-heatmap rect {
+  rx: 1.5px;
+  ry: 1.5px;
+}
+.react-calendar-heatmap rect:hover {
+  stroke: hsl(var(--foreground));
+  stroke-width: 0.5;
+}
+.react-calendar-heatmap .color-empty { fill: hsl(0 0% 95%); }
+.react-calendar-heatmap .color-scale-1 { fill: #9be9a8; }
+.react-calendar-heatmap .color-scale-2 { fill: #40c463; }
+.react-calendar-heatmap .color-scale-3 { fill: #30a14e; }
+.react-calendar-heatmap .color-scale-4 { fill: #216e39; }
+.react-calendar-heatmap .color-today {
+  stroke: hsl(var(--foreground));
+  stroke-width: 1;
+  paint-order: stroke;
+}
+
+.dark .react-calendar-heatmap .color-empty { fill: hsl(0 0% 14%); }
 .dark .react-calendar-heatmap .color-scale-1 { fill: #0e4429; }
 .dark .react-calendar-heatmap .color-scale-2 { fill: #006d32; }
 .dark .react-calendar-heatmap .color-scale-3 { fill: #26a641; }
 .dark .react-calendar-heatmap .color-scale-4 { fill: #39d353; }
+
+/* Pet companion — pixel-art keyframes. Transform/opacity only (compositor-only). */
+@keyframes pet-idle-bob {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-2px); }
+}
+@keyframes pet-celebrate {
+  0%, 100% { transform: translateY(0) rotate(0); }
+  25%      { transform: translateY(-8px) rotate(-6deg); }
+  75%      { transform: translateY(-8px) rotate(6deg); }
+}
+@keyframes pet-urgent {
+  0%, 100% { transform: translateX(0) rotate(0); }
+  20%      { transform: translateX(-1px) rotate(-3deg); }
+  60%      { transform: translateX(1px) rotate(3deg); }
+}
+@keyframes pet-zzz {
+  0%   { opacity: 0; transform: translate(0, 0); }
+  50%  { opacity: 1; }
+  100% { opacity: 0; transform: translate(8px, -14px); }
+}
+@keyframes pet-sparkle {
+  0%   { opacity: 0; transform: scale(0.5); }
+  50%  { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(0.5) translateY(-10px); }
+}
+@keyframes bubble-in {
+  0%   { opacity: 0; transform: translateY(4px) scale(0.96); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pet-anim-idle, .pet-anim-celebrate, .pet-anim-urgent { animation: none !important; }
+}
+
+@layer utilities {
+  .image-pixelated {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
+  .pet-shadow {
+    box-shadow: 0 4px 16px hsl(0 0% 0% / 0.10), 0 1px 2px hsl(0 0% 0% / 0.06);
+  }
+}
+
+/* Recharts: tooltips on theme */
+.recharts-default-tooltip {
+  background-color: hsl(var(--popover)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: var(--radius) !important;
+  font-size: 12px !important;
+  box-shadow: 0 1px 2px hsl(0 0% 0% / 0.04);
+}
+.recharts-tooltip-label { color: hsl(var(--muted-foreground)) !important; }
+.recharts-cartesian-axis-tick text { fill: hsl(var(--muted-foreground)); font-size: 11px; }

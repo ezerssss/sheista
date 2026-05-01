@@ -1,5 +1,4 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Flame, Trophy } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export function StreakCard({
   current,
@@ -10,31 +9,43 @@ export function StreakCard({
   longest: number;
   todayDone: boolean;
 }) {
+  const status = todayDone
+    ? "today complete"
+    : current > 0
+      ? "do today before midnight"
+      : "start one today";
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium text-muted-foreground">Streak</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-2">
-              <Flame className={`h-6 w-6 ${current > 0 ? "text-orange-500" : "text-muted-foreground"}`} />
-              <span className="text-3xl font-bold">{current}</span>
-              <span className="text-sm text-muted-foreground">days</span>
-            </div>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {todayDone ? "today complete" : current > 0 ? "do today before midnight" : "start one today"}
-            </p>
-          </div>
-          <div className="text-right">
-            <div className="flex items-center justify-end gap-1 text-sm text-muted-foreground">
-              <Trophy className="h-3.5 w-3.5" /> longest
-            </div>
-            <div className="text-xl font-semibold">{longest}</div>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="label-eyebrow">streak</p>
+        <span className="font-mono text-[10px] text-muted-foreground">
+          longest {longest}
+        </span>
+      </div>
+      <div className="flex items-baseline gap-3">
+        <span
+          className={cn(
+            "font-mono text-5xl font-light tabular-nums tracking-tightest",
+            current > 0 ? "text-foreground" : "text-muted-foreground",
+          )}
+        >
+          {current}
+        </span>
+        <span className="text-xs text-muted-foreground">
+          {current === 1 ? "day" : "days"}
+        </span>
+      </div>
+      <div className="flex items-center gap-2 text-xs">
+        <span
+          className={cn(
+            "h-1.5 w-1.5 rounded-full",
+            todayDone ? "bg-accent" : current > 0 ? "bg-accent/50" : "bg-muted-foreground/40",
+          )}
+        />
+        <span className={cn("text-muted-foreground", todayDone && "text-accent")}>
+          {status}
+        </span>
+      </div>
+    </div>
   );
 }

@@ -35,16 +35,26 @@ export function HandleSetup() {
   return (
     <div className="space-y-4">
       <div className="space-y-2">
-        <Label htmlFor="handle">Codeforces handle</Label>
-        <Input
-          id="handle"
-          placeholder="tourist"
-          value={handle}
-          onChange={(e) => setHandle(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handle && onSubmit()}
-        />
+        <Label htmlFor="handle" className="text-xs font-medium text-muted-foreground">
+          Codeforces handle
+        </Label>
+        <div className="flex items-center rounded-md border border-input transition-colors focus-within:border-foreground/50">
+          <span className="select-none pl-3 pr-1 font-mono text-sm text-muted-foreground">@</span>
+          <Input
+            id="handle"
+            placeholder="tourist"
+            value={handle}
+            onChange={(e) => setHandle(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handle && onSubmit()}
+            className="border-0 px-1 font-mono shadow-none focus-visible:ring-0"
+          />
+        </div>
       </div>
-      <Button onClick={onSubmit} disabled={!handle || submitting} className="w-full">
+      <Button
+        onClick={onSubmit}
+        disabled={!handle || submitting}
+        className="w-full"
+      >
         {submitting ? "Connecting…" : "Connect"}
       </Button>
       {error && <p className="text-sm text-destructive">{error}</p>}

@@ -1,39 +1,30 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { RefreshCw, Play, Square, Check, AlertCircle } from "lucide-react";
+import { RefreshCw, Play, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { TagSelector } from "@/components/TagSelector";
-import { CountdownTimer } from "@/components/CountdownTimer";
-import { useAllProblems, useSolvedProblems } from "@/hooks/useProblems";
-import { allTags } from "@/lib/themecp/tags";
+import { useAllProblems, useLastTraining, useSolvedProblems } from "@/hooks/useProblems";
+import { pickWeightedRandomTag } from "@/lib/themecp/tags";
 import { allLevels, getLevel, ratingsOfLevel } from "@/lib/themecp/levels";
 import { selectRoundProblems, type SlotResult } from "@/lib/themecp/select-problems";
-import { computePerformance } from "@/lib/themecp/performance";
-import type { TrainingProblem, CodeforcesSubmission } from "@/types/themecp";
-
-const TRAINING_KEY = "sheista:active-training";
-
-type ActiveTraining = {
-  level: number;
-  startTime: number; // ms (after countdown)
-  endTime: number;
-  problems: TrainingProblem[];
-  tagFilter: string[];
-};
+import {
+  type ActiveTraining,
+  getActiveTraining,
+  setActiveTraining,
+} from "@/lib/themecp/active-training";
+import type { TrainingProblem } from "@/types/themecp";
 
 export function Trainer({ handle, level: initialLevel }: { handle: string; level: number }) {
   const router = useRouter();
   const { problems: pool, isLoading: poolLoading, error: poolErr } = useAllProblems();
   const { solved, refresh: refreshSolved } = useSolvedProblems(handle);
+  const { lastTraining, refresh: refreshLast } = useLastTraining();
 
-  // Editable level (defaults to user's current).
   const [level, setLevel] = useState(initialLevel);
   const levelObj = useMemo(() => getLevel(level), [level]);
   const ratings = useMemo(() => ratingsOfLevel(levelObj), [levelObj]);
@@ -44,38 +35,52 @@ export function Trainer({ handle, level: initialLevel }: { handle: string; level
   const [rangeUb, setRangeUb] = useState<string>("");
 
   const [slots, setSlots] = useState<SlotResult[]>([]);
-  const [training, setTraining] = useState<ActiveTraining | null>(null);
-  const [finishing, setFinishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Restore in-progress training from localStorage.
+  // If there's already a live round, /training has nothing useful to offer —
+  // bounce the user to the round room.
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(TRAINING_KEY);
-      if (stored) {
-        const t = JSON.parse(stored) as ActiveTraining;
-        if (t.endTime > Date.now()) setTraining(t);
-        else localStorage.removeItem(TRAINING_KEY);
-      }
-    } catch {}
-  }, []);
-
-  useEffect(() => {
-    if (training) localStorage.setItem(TRAINING_KEY, JSON.stringify(training));
-  }, [training]);
+    if (getActiveTraining()) router.replace("/round");
+  }, [router]);
 
   const solvedKeys = useMemo(
     () => new Set(solved.map((p) => `${p.contestId}_${p.index}`)),
     [solved],
   );
 
+  // Gate: after a non-AK round, force the user to upsolve the easiest unsolved
+  // problem before they can start a new round (matches the ThemeCP proposal).
+  const gateProblem = useMemo(() => {
+    if (!lastTraining) return null;
+    const unsolved = lastTraining.training_problems.filter((p) => !p.solved_at);
+    if (unsolved.length === 0) return null;
+    return unsolved.reduce((min, p) => (p.rating < min.rating ? p : min), unsolved[0]);
+  }, [lastTraining]);
+
+  const gateBlocked = useMemo(() => {
+    if (!gateProblem) return false;
+    return !solvedKeys.has(`${gateProblem.contest_id}_${gateProblem.problem_index}`);
+  }, [gateProblem, solvedKeys]);
+
+  const [checkingGate, setCheckingGate] = useState(false);
+  const checkGate = async () => {
+    setCheckingGate(true);
+    try {
+      await Promise.all([
+        refreshSolved(),
+        refreshLast(),
+        fetch("/api/upsolve", { method: "POST" }).catch(() => null),
+      ]);
+    } finally {
+      setCheckingGate(false);
+    }
+  };
+
   const onToggleTag = (v: string) =>
     setTagFilter((prev) => (prev.includes(v) ? prev.filter((t) => t !== v) : [...prev, v]));
 
   const onRandomTag = () => {
-    const tags = allTags();
-    const t = tags[Math.floor(Math.random() * tags.length)].value;
-    setTagFilter([t]);
+    setTagFilter([pickWeightedRandomTag().value]);
   };
 
   const applyRange = () => {
@@ -107,337 +112,246 @@ export function Trainer({ handle, level: initialLevel }: { handle: string; level
       setError("Some slots have no unsolved match. Loosen filters or change tags.");
       return;
     }
-    const startTime = Date.now() + 10_000; // 10s warmup
+    const startTime = Date.now() + 10_000;
     const endTime = startTime + Number(levelObj.time) * 60_000;
     const problems = slots.map((s) => s.problem!) as TrainingProblem[];
-    setTraining({ level, startTime, endTime, problems, tagFilter });
+    const training: ActiveTraining = { level, startTime, endTime, problems, tagFilter };
+    setActiveTraining(training);
+    router.push("/round");
   };
-
-  // ---- Auto-detect AK polling ----
-  const pollRef = useRef<number | null>(null);
-  useEffect(() => {
-    if (!training) {
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
-      return;
-    }
-    const tick = async () => {
-      try {
-        const res = await fetch(`/api/cf/submissions/${encodeURIComponent(handle)}?count=50`);
-        const json = await res.json();
-        if (!json.ok) return;
-        const subs = json.submissions as CodeforcesSubmission[];
-        setTraining((prev) => {
-          if (!prev) return prev;
-          const updatedProblems = prev.problems.map((p) => {
-            if (p.solvedAt) return p;
-            const okSub = subs.find(
-              (s) =>
-                s.verdict === "OK" &&
-                s.problem.contestId === p.contestId &&
-                s.problem.index === p.index &&
-                s.creationTimeSeconds * 1000 >= prev.startTime,
-            );
-            return okSub ? { ...p, solvedAt: okSub.creationTimeSeconds * 1000 } : p;
-          });
-          return { ...prev, problems: updatedProblems };
-        });
-      } catch {
-        // network blip — ignore, next tick will retry.
-      }
-    };
-    void tick();
-    pollRef.current = window.setInterval(tick, 30_000);
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-      pollRef.current = null;
-    };
-  }, [training, handle]);
-
-  // Auto-finish when all 4 solved.
-  useEffect(() => {
-    if (!training) return;
-    const all = training.problems.every((p) => p.solvedAt !== null);
-    if (all) void finish(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [training?.problems]);
-
-  const refreshSubmissions = async () => {
-    if (!training) return;
-    const res = await fetch(`/api/cf/submissions/${encodeURIComponent(handle)}?count=50`);
-    const json = await res.json();
-    if (!json.ok) return;
-    const subs = json.submissions as CodeforcesSubmission[];
-    setTraining((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        problems: prev.problems.map((p) => {
-          if (p.solvedAt) return p;
-          const okSub = subs.find(
-            (s) =>
-              s.verdict === "OK" &&
-              s.problem.contestId === p.contestId &&
-              s.problem.index === p.index &&
-              s.creationTimeSeconds * 1000 >= prev.startTime,
-          );
-          return okSub ? { ...p, solvedAt: okSub.creationTimeSeconds * 1000 } : p;
-        }),
-      };
-    });
-  };
-
-  const finish = async (autoAk: boolean) => {
-    if (!training || finishing) return;
-    setFinishing(true);
-    try {
-      const isAk = autoAk || training.problems.every((p) => p.solvedAt !== null);
-      const performance = computePerformance({
-        level: training.level,
-        startTime: training.startTime,
-        problems: training.problems,
-      });
-      const res = await fetch("/api/trainings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          level_at_start: training.level,
-          tag_filter: training.tagFilter,
-          started_at: training.startTime,
-          ends_at: training.endTime,
-          performance,
-          is_ak: isAk,
-          problems: training.problems.map((p) => ({
-            slot: p.slot,
-            contestId: p.contestId,
-            index: p.index,
-            name: p.name,
-            rating: p.rating,
-            tags: p.tags,
-            solvedAt: p.solvedAt,
-          })),
-        }),
-      });
-      const json = await res.json();
-      if (!json.ok) throw new Error(json.error ?? "Failed");
-      localStorage.removeItem(TRAINING_KEY);
-      setTraining(null);
-      await refreshSolved();
-      router.push(`/history?just=${json.training_id}`);
-      router.refresh();
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setFinishing(false);
-    }
-  };
-
-  const stop = () => {
-    if (!confirm("Stop training? It won't be saved.")) return;
-    localStorage.removeItem(TRAINING_KEY);
-    setTraining(null);
-    setSlots([]);
-  };
-
-  const isWarmup = training && Date.now() < training.startTime;
-  const isLive = training && Date.now() >= training.startTime && Date.now() < training.endTime;
-  const allSolved = training?.problems.every((p) => p.solvedAt !== null);
 
   if (poolErr) {
     return (
-      <div className="rounded-md border border-destructive/40 bg-destructive/10 p-4 text-sm">
+      <div className="rounded-md border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
         Couldn&apos;t load Codeforces problems: {poolErr.message}
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Round configuration</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <div>
-              <Label>Level</Label>
-              <select
-                disabled={!!training}
-                value={level}
-                onChange={(e) => setLevel(Number(e.target.value))}
-                className="mt-1 h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm"
-              >
-                {allLevels().map((l) => (
-                  <option key={l.id} value={Number(l.level)}>
-                    {l.level} — {l.P1}/{l.P2}/{l.P3}/{l.P4} ({l.time}m)
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="col-span-2">
-              <Label>Contest ID range (freshness, optional)</Label>
-              <div className="mt-1 flex gap-2">
-                <Input
-                  placeholder="from (e.g. 1500)"
-                  value={rangeLb}
-                  disabled={!!training}
-                  onChange={(e) => setRangeLb(e.target.value)}
-                />
-                <Input
-                  placeholder="to (e.g. 2200)"
-                  value={rangeUb}
-                  disabled={!!training}
-                  onChange={(e) => setRangeUb(e.target.value)}
-                />
-                <Button variant="outline" onClick={applyRange} disabled={!!training}>
-                  Apply
-                </Button>
+    <div className="space-y-10">
+      <header className="space-y-2">
+        <p className="label-eyebrow">Custom round</p>
+        <h1 className="text-3xl font-semibold tracking-tight">Configure a round</h1>
+        <p className="text-sm text-muted-foreground">
+          Pick a level, an optional theme, and a contest-id range — then generate four unsolved
+          problems. Start moves you into the round room.
+        </p>
+      </header>
+
+      {gateBlocked && gateProblem && (
+        <section className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                <AlertCircle className="h-4 w-4" />
+                <p className="label-eyebrow">Upsolve required</p>
               </div>
-            </div>
-            <div>
-              <Label>Active range</Label>
-              <p className="mt-2 text-sm text-muted-foreground">
-                {contestRange ? `${contestRange[0]} – ${contestRange[1]}` : "all contests"}
+              <p className="text-sm">
+                Solve the easiest problem you missed last round before starting a new one — that&apos;s
+                the ThemeCP rule.
               </p>
+              <Link
+                href={`https://codeforces.com/contest/${gateProblem.contest_id}/problem/${gateProblem.problem_index}`}
+                target="_blank"
+                className="inline-flex items-center gap-2 text-sm font-medium underline-offset-4 hover:underline"
+              >
+                <span className="font-mono text-xs text-muted-foreground">
+                  {gateProblem.rating}
+                </span>
+                <span className="font-mono text-muted-foreground">
+                  {gateProblem.contest_id}
+                  {gateProblem.problem_index}
+                </span>{" "}
+                {gateProblem.problem_name || "Problem"}
+              </Link>
             </div>
+            <Button variant="outline" size="sm" onClick={checkGate} disabled={checkingGate}>
+              <RefreshCw className="h-3.5 w-3.5" />
+              {checkingGate ? "Checking…" : "I solved it"}
+            </Button>
           </div>
+        </section>
+      )}
 
-          <div>
-            <Label className="mb-2 block">Time per problem</Label>
-            <div className="grid grid-cols-4 gap-2">
-              {ratings.map((r, i) => (
-                <Badge key={i} variant="outline" className="justify-center py-1">
-                  P{i + 1}: {r}
-                </Badge>
+      <section className="space-y-6 rounded-lg border border-border p-6">
+        <div className="grid gap-6 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label className="text-xs font-medium text-muted-foreground">Level</Label>
+            <select
+              value={level}
+              onChange={(e) => setLevel(Number(e.target.value))}
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 font-mono text-sm transition-colors focus-visible:border-foreground/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            >
+              {allLevels().map((l) => (
+                <option key={l.id} value={Number(l.level)}>
+                  {l.level} — {l.P1}/{l.P2}/{l.P3}/{l.P4} ({l.time}m)
+                </option>
               ))}
-            </div>
+            </select>
           </div>
 
-          {!training && (
-            <TagSelector
-              selected={tagFilter}
-              onToggle={onToggleTag}
-              onClear={() => setTagFilter([])}
-              onRandom={onRandomTag}
-            />
-          )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>{training ? "Round in progress" : "Generated round"}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {!training && slots.length === 0 && (
-            <p className="text-sm text-muted-foreground">
-              Pick your filters then hit Generate. The selector will only suggest problems you haven&apos;t already
-              solved on Codeforces.
+          <div className="space-y-2">
+            <Label className="text-xs font-medium text-muted-foreground">
+              Contest ID range <span className="text-muted-foreground/70">(optional)</span>
+            </Label>
+            <div className="flex gap-2">
+              <Input
+                placeholder="from"
+                value={rangeLb}
+                onChange={(e) => setRangeLb(e.target.value)}
+                className="font-mono"
+              />
+              <Input
+                placeholder="to"
+                value={rangeUb}
+                onChange={(e) => setRangeUb(e.target.value)}
+                className="font-mono"
+              />
+              <Button variant="outline" size="default" onClick={applyRange}>
+                Apply
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {contestRange ? (
+                <>
+                  active{" "}
+                  <span className="font-mono text-foreground">
+                    {contestRange[0]}–{contestRange[1]}
+                  </span>
+                </>
+              ) : (
+                "all contests"
+              )}
             </p>
-          )}
+          </div>
+        </div>
 
-          {(training ? training.problems : slots.map((s) => s.problem))
-            .map((problem, i) => {
-              const slotResult = slots[i];
-              const fallback = !training ? slotResult?.fallback : "ok";
+        <hr className="border-border" />
+
+        <div className="space-y-2">
+          <p className="label-eyebrow">Slots</p>
+          <div className="grid grid-cols-4 gap-2">
+            {ratings.map((r, i) => (
+              <div
+                key={i}
+                className="rounded-md border border-border px-2 py-1.5 text-center"
+              >
+                <div className="text-[9px] uppercase tracking-[0.15em] text-muted-foreground">
+                  p{i + 1}
+                </div>
+                <div className="font-mono text-sm tabular-nums">{r}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <hr className="border-border" />
+
+        <TagSelector
+          selected={tagFilter}
+          onToggle={onToggleTag}
+          onClear={() => setTagFilter([])}
+          onRandom={onRandomTag}
+        />
+      </section>
+
+      <section className="space-y-4">
+        <div className="flex items-baseline justify-between">
+          <h2 className="text-base font-semibold tracking-tight">
+            {slots.length === 0 ? "Round" : "Generated round"}
+          </h2>
+        </div>
+
+        {slots.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-border p-10 text-center">
+            <p className="text-sm text-muted-foreground">
+              Pick your filters then hit Generate. The selector will only suggest problems you
+              haven&apos;t already solved on Codeforces.
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-hidden rounded-lg border border-border">
+            {slots.map((s, i) => {
+              const problem = s.problem;
+              const fallback = s.fallback;
               const rating = problem?.rating ?? ratings[i];
               return (
                 <div
                   key={i}
-                  className="flex flex-col gap-2 rounded-md border p-3 sm:flex-row sm:items-center sm:justify-between"
+                  className="flex flex-col gap-2 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"
+                  style={{ borderTop: i > 0 ? "1px solid var(--border)" : undefined }}
                 >
-                  <div className="flex flex-col gap-1">
-                    <div className="flex items-center gap-2">
-                      <Badge variant="secondary">P{i + 1}</Badge>
-                      <Badge variant="outline">{rating}</Badge>
+                  <div className="flex flex-1 flex-col gap-1.5">
+                    <div className="flex items-center gap-3">
+                      <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-border font-mono text-[10px] text-muted-foreground">
+                        {i + 1}
+                      </span>
+                      <span className="font-mono text-xs text-muted-foreground">{rating}</span>
                       {problem ? (
                         <Link
                           href={problem.url}
                           target="_blank"
-                          className="text-sm font-medium text-primary hover:underline"
+                          className="text-sm font-medium underline-offset-4 hover:underline"
                         >
-                          {problem.contestId}{problem.index} · {problem.name}
+                          <span className="font-mono text-muted-foreground">
+                            {problem.contestId}
+                            {problem.index}
+                          </span>{" "}
+                          {problem.name}
                         </Link>
                       ) : (
-                        <span className="text-sm text-muted-foreground">— no unsolved problem found —</span>
+                        <span className="text-sm italic text-muted-foreground">
+                          no unsolved problem found
+                        </span>
                       )}
                     </div>
                     {problem && (
-                      <div className="flex flex-wrap gap-1 text-xs text-muted-foreground">
+                      <div className="flex flex-wrap gap-1 pl-9 text-[11px] text-muted-foreground">
                         {problem.tags.map((t) => (
-                          <span key={t} className="rounded bg-secondary px-1.5 py-0.5">
-                            {t}
-                          </span>
+                          <span key={t}>#{t}</span>
                         ))}
                       </div>
                     )}
-                    {!training && fallback && fallback !== "ok" && fallback !== "empty" && problem && (
-                      <p className="flex items-center gap-1 text-xs text-amber-500">
+                    {fallback && fallback !== "ok" && fallback !== "empty" && problem && (
+                      <p className="flex items-center gap-1.5 pl-9 text-[11px] text-muted-foreground">
                         <AlertCircle className="h-3 w-3" />
-                        {fallback === "no-range" && "No in-range match — picked outside the contest range."}
-                        {fallback === "no-tag" && "No tag match — picked an untagged problem at this rating."}
+                        {fallback === "no-range" && "no in-range match — picked outside the contest range"}
+                        {fallback === "no-tag" && "no tag match — picked an untagged problem at this rating"}
                       </p>
                     )}
-                    {!training && fallback === "empty" && (
-                      <p className="flex items-center gap-1 text-xs text-destructive">
+                    {fallback === "empty" && (
+                      <p className="flex items-center gap-1.5 pl-9 text-[11px] text-destructive">
                         <AlertCircle className="h-3 w-3" />
-                        No unsolved problem at rating {rating} with these filters.
+                        no unsolved problem at rating {rating}
                       </p>
                     )}
                   </div>
-                  {training && problem && (
-                    <div className="text-sm">
-                      {problem.solvedAt ? (
-                        <span className="flex items-center gap-1 text-green-500">
-                          <Check className="h-4 w-4" /> {Math.round((problem.solvedAt - training.startTime) / 60_000)}m
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">unsolved</span>
-                      )}
-                    </div>
-                  )}
                 </div>
               );
             })}
-
-          {error && <p className="text-sm text-destructive">{error}</p>}
-
-          <div className="flex flex-wrap items-center gap-2">
-            {!training && (
-              <>
-                <Button onClick={generate} disabled={poolLoading}>
-                  <RefreshCw className="h-4 w-4" /> {slots.length === 0 ? "Generate" : "Regenerate"}
-                </Button>
-                {slots.length > 0 && slots.every((s) => s.problem) && (
-                  <Button onClick={start}>
-                    <Play className="h-4 w-4" /> Start
-                  </Button>
-                )}
-              </>
-            )}
-            {training && (
-              <>
-                <CountdownTimer
-                  startTime={training.startTime}
-                  endTime={training.endTime}
-                  onExpire={() => void finish(false)}
-                />
-                <Button variant="outline" onClick={refreshSubmissions} disabled={!isLive}>
-                  <RefreshCw className="h-4 w-4" /> Refresh
-                </Button>
-                <Button onClick={() => void finish(allSolved ?? false)} disabled={finishing || !!isWarmup}>
-                  Finish now
-                </Button>
-                <Button variant="destructive" onClick={stop} disabled={finishing}>
-                  <Square className="h-4 w-4" /> Stop
-                </Button>
-              </>
-            )}
           </div>
-        </CardContent>
-      </Card>
+        )}
+
+        {error && (
+          <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+            {error}
+          </p>
+        )}
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Button onClick={generate} disabled={poolLoading || gateBlocked}>
+            <RefreshCw className="h-3.5 w-3.5" />
+            {slots.length === 0 ? "Generate" : "Regenerate"}
+          </Button>
+          {slots.length > 0 && slots.every((s) => s.problem) && !gateBlocked && (
+            <Button onClick={start} variant="default" data-pet-perch="primary">
+              <Play className="h-3.5 w-3.5" />
+              Start round
+            </Button>
+          )}
+        </div>
+      </section>
     </div>
   );
 }
