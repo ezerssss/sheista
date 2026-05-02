@@ -6,6 +6,12 @@ type Args = {
   ratings: [number, number, number, number];
   tags: string[]; // empty = no theme filter
   contestRange?: [number, number] | null; // freshness window; null = no filter
+  // When true, never drop the tag filter as a fallback. Slots without a
+  // tag-matched unsolved problem return fallback="empty" instead of an
+  // off-theme pick. Used by the dashboard quick-start, which guarantees a
+  // round shares a single theme — see callers for the retry-with-different
+  // -theme strategy when this returns empty slots.
+  strictTags?: boolean;
 };
 
 export type SlotResult = {
@@ -58,7 +64,7 @@ function pickRandomNew(pool: CodeforcesProblem[], chosen: Set<string>): Codeforc
  *   5. nothing left -> fallback="empty", problem=null
  */
 export function selectRoundProblems(args: Args): SlotResult[] {
-  const { pool, solvedKeys, ratings, tags, contestRange } = args;
+  const { pool, solvedKeys, ratings, tags, contestRange, strictTags } = args;
   const tagSet = new Set(tags);
 
   const inRange = (p: CodeforcesProblem) =>
@@ -81,7 +87,7 @@ export function selectRoundProblems(args: Args): SlotResult[] {
       { problems: tagMatched.filter(inRange), fallback: "ok" },
       { problems: tagMatched.filter((p) => !inRange(p)), fallback: "no-range" },
     ];
-    if (tags.length > 0) {
+    if (tags.length > 0 && !strictTags) {
       // Drop the tag filter (theme escapes for this slot, but problem stays unsolved).
       buckets.push({ problems: unsolved.filter(inRange), fallback: "no-tag" });
       buckets.push({ problems: unsolved.filter((p) => !inRange(p)), fallback: "no-tag" });
