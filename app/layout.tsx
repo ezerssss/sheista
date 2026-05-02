@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
+import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 import { NavBar } from "@/components/NavBar";
 import { PetCompanion } from "@/components/pet/PetCompanion";
@@ -64,6 +65,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <PetCompanion />
         <LevelChangeOverlay />
         <PreviewPanel />
+        <Analytics />
       </body>
     </html>
   );
