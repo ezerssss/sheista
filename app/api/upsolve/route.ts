@@ -58,26 +58,3 @@ export async function POST() {
 
   return NextResponse.json({ ok: true, marked: newlySolved.length });
 }
-
-export async function DELETE(request: Request) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ ok: false, error: "Not authenticated" }, { status: 401 });
-
-  const url = new URL(request.url);
-  const contestId = Number(url.searchParams.get("contestId"));
-  const problemIndex = url.searchParams.get("index");
-  if (!contestId || !problemIndex) {
-    return NextResponse.json({ ok: false, error: "Missing query params" }, { status: 400 });
-  }
-
-  const { error } = await supabase
-    .from("upsolve_problems")
-    .delete()
-    .eq("user_id", user.id)
-    .eq("contest_id", contestId)
-    .eq("problem_index", problemIndex);
-
-  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true });
-}

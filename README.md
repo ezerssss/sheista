@@ -54,7 +54,7 @@ app/                          Next.js routes
   api/cf/                     server proxies for the CF public API (cached)
   api/profile/                upsert profile from CF handle
   api/trainings/              POST one round; GET history
-  api/upsolve/                CRUD upsolve queue
+  api/upsolve/                list upsolve queue + sync solved from CF
   api/pet/state/              consolidated user-state endpoint that drives the pet
   auth/login/                 magic-link form
   auth/callback/              Supabase code exchange

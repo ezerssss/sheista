@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { RefreshCw, X, Check } from "lucide-react";
+import { RefreshCw, Check } from "lucide-react";
 
 type Item = {
   contest_id: number;
@@ -34,16 +34,6 @@ export function UpsolveList() {
     await fetch("/api/upsolve", { method: "POST" });
     await load();
     setRefreshing(false);
-  };
-
-  const remove = async (it: Item) => {
-    await fetch(
-      `/api/upsolve?contestId=${it.contest_id}&index=${encodeURIComponent(it.problem_index)}`,
-      { method: "DELETE" },
-    );
-    setItems((prev) =>
-      prev.filter((p) => p.contest_id !== it.contest_id || p.problem_index !== it.problem_index),
-    );
   };
 
   useEffect(() => {
@@ -82,22 +72,14 @@ export function UpsolveList() {
           {open.length > 0 && (
             <Section title="Open" count={open.length}>
               {open.map((it) => (
-                <ProblemRow
-                  key={`${it.contest_id}-${it.problem_index}`}
-                  it={it}
-                  onRemove={remove}
-                />
+                <ProblemRow key={`${it.contest_id}-${it.problem_index}`} it={it} />
               ))}
             </Section>
           )}
           {done.length > 0 && (
             <Section title="Solved" count={done.length}>
               {done.map((it) => (
-                <ProblemRow
-                  key={`${it.contest_id}-${it.problem_index}`}
-                  it={it}
-                  onRemove={remove}
-                />
+                <ProblemRow key={`${it.contest_id}-${it.problem_index}`} it={it} />
               ))}
             </Section>
           )}
@@ -127,46 +109,40 @@ function Section({
   );
 }
 
-function ProblemRow({ it, onRemove }: { it: Item; onRemove: (it: Item) => void }) {
+function ProblemRow({ it }: { it: Item }) {
   return (
-    <div className="flex flex-col gap-2 border-t border-border px-5 py-4 first:border-t-0 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex flex-col gap-1.5">
-        <div className="flex flex-wrap items-center gap-3">
-          {it.solved_at ? (
-            <span className="inline-flex items-center gap-1.5 text-xs text-accent">
-              <Check className="h-3.5 w-3.5" />
-            </span>
-          ) : (
-            <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />
-          )}
-          {it.rating && (
-            <span className="font-mono text-xs text-muted-foreground">{it.rating}</span>
-          )}
-          <Link
-            href={`https://codeforces.com/contest/${it.contest_id}/problem/${it.problem_index}`}
-            target="_blank"
-            className="text-sm font-medium underline-offset-4 hover:underline"
-          >
-            <span className="font-mono text-muted-foreground">
-              {it.contest_id}
-              {it.problem_index}
-            </span>{" "}
-            {it.problem_name || "Problem"}
-          </Link>
-          {it.solved_at && <Badge variant="accent">solved</Badge>}
-        </div>
-        {it.tags.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 pl-6 text-[11px] text-muted-foreground">
-            {it.tags.map((t) => (
-              <span key={t}>#{t}</span>
-            ))}
-          </div>
+    <div className="flex flex-col gap-2 border-t border-border px-5 py-4 first:border-t-0">
+      <div className="flex flex-wrap items-center gap-3">
+        {it.solved_at ? (
+          <span className="inline-flex items-center gap-1.5 text-xs text-accent">
+            <Check className="h-3.5 w-3.5" />
+          </span>
+        ) : (
+          <span className="h-1.5 w-1.5 rounded-full bg-muted-foreground/40" />
         )}
+        {it.rating && (
+          <span className="font-mono text-xs text-muted-foreground">{it.rating}</span>
+        )}
+        <Link
+          href={`https://codeforces.com/contest/${it.contest_id}/problem/${it.problem_index}`}
+          target="_blank"
+          className="text-sm font-medium underline-offset-4 hover:underline"
+        >
+          <span className="font-mono text-muted-foreground">
+            {it.contest_id}
+            {it.problem_index}
+          </span>{" "}
+          {it.problem_name || "Problem"}
+        </Link>
+        {it.solved_at && <Badge variant="accent">solved</Badge>}
       </div>
-      <Button variant="ghost" size="sm" onClick={() => onRemove(it)}>
-        <X className="h-3.5 w-3.5" />
-        Remove
-      </Button>
+      {it.tags.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 pl-6 text-[11px] text-muted-foreground">
+          {it.tags.map((t) => (
+            <span key={t}>#{t}</span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

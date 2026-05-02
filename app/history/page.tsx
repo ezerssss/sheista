@@ -38,6 +38,15 @@ export default async function HistoryPage() {
 
   const list = (trainings ?? []) as unknown as Row[];
 
+  const { data: upsolved } = await supabase
+    .from("upsolve_problems")
+    .select("contest_id, problem_index")
+    .eq("user_id", user.id)
+    .not("solved_at", "is", null);
+  const upsolvedSet = new Set(
+    (upsolved ?? []).map((u) => `${u.contest_id}_${u.problem_index}`),
+  );
+
   const chartData = [...list]
     .reverse()
     .map((t) => ({
@@ -74,7 +83,14 @@ export default async function HistoryPage() {
       </section>
 
       <section className="space-y-4">
-        <h2 className="text-base font-semibold tracking-tight">All rounds</h2>
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+          <h2 className="text-base font-semibold tracking-tight">All rounds</h2>
+          <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+            <LegendItem dotClass="bg-accent" label="solved" />
+            <LegendItem dotClass="bg-amber-500" label="upsolved" />
+            <LegendItem dotClass="bg-muted-foreground/40" label="unsolved" />
+          </div>
+        </div>
         {list.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border p-10 text-center">
             <p className="text-sm text-muted-foreground">No rounds yet.</p>
@@ -119,28 +135,46 @@ export default async function HistoryPage() {
                 <div className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
                   {[...t.training_problems]
                     .sort((a, b) => a.slot - b.slot)
-                    .map((p) => (
-                      <Link
-                        key={p.slot}
-                        href={`https://codeforces.com/contest/${p.contest_id}/problem/${p.problem_index}`}
-                        target="_blank"
-                        className={`flex min-w-0 items-center gap-1.5 truncate text-xs hover:underline ${
-                          p.solved_at ? "text-accent" : "text-muted-foreground"
-                        }`}
-                        title={`${p.contest_id}${p.problem_index} ${p.problem_name}`}
-                      >
-                        <span
-                          className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${
-                            p.solved_at ? "bg-accent" : "bg-muted-foreground/40"
+                    .map((p) => {
+                      const isUpsolved =
+                        !p.solved_at &&
+                        upsolvedSet.has(`${p.contest_id}_${p.problem_index}`);
+                      const status = p.solved_at
+                        ? "solved in round"
+                        : isUpsolved
+                          ? "upsolved later"
+                          : "not solved";
+                      return (
+                        <Link
+                          key={p.slot}
+                          href={`https://codeforces.com/contest/${p.contest_id}/problem/${p.problem_index}`}
+                          target="_blank"
+                          className={`flex min-w-0 items-center gap-1.5 truncate text-xs hover:underline ${
+                            p.solved_at
+                              ? "text-accent"
+                              : isUpsolved
+                                ? "text-amber-600 dark:text-amber-400"
+                                : "text-muted-foreground"
                           }`}
-                        />
-                        <span className="font-mono">
-                          {p.contest_id}
-                          {p.problem_index}
-                        </span>
-                        <span className="text-muted-foreground">({p.rating})</span>
-                      </Link>
-                    ))}
+                          title={`${p.contest_id}${p.problem_index} ${p.problem_name} — ${status}`}
+                        >
+                          <span
+                            className={`inline-block h-1.5 w-1.5 shrink-0 rounded-full ${
+                              p.solved_at
+                                ? "bg-accent"
+                                : isUpsolved
+                                  ? "bg-amber-500"
+                                  : "bg-muted-foreground/40"
+                            }`}
+                          />
+                          <span className="font-mono">
+                            {p.contest_id}
+                            {p.problem_index}
+                          </span>
+                          <span className="text-muted-foreground">({p.rating})</span>
+                        </Link>
+                      );
+                    })}
                 </div>
               </div>
             ))}
@@ -148,6 +182,15 @@ export default async function HistoryPage() {
         )}
       </section>
     </div>
+  );
+}
+
+function LegendItem({ dotClass, label }: { dotClass: string; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span className={`inline-block h-1.5 w-1.5 rounded-full ${dotClass}`} />
+      {label}
+    </span>
   );
 }
 
