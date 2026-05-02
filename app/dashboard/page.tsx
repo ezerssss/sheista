@@ -28,6 +28,7 @@ export default async function DashboardPage() {
     akRate,
     avgRecentPerf,
     gateCandidate,
+    weakestTag,
   } = stats;
 
   const today = new Date();
@@ -67,6 +68,7 @@ export default async function DashboardPage() {
             level={profile.level}
             gateCandidate={gateCandidate}
             todayDone={streak.todayDone}
+            weakestTag={weakestTag}
           />
           <ShareButton
             cfHandle={profile.cf_handle}

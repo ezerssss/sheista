@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { useAllProblems, useSolvedProblems } from "@/hooks/useProblems";
 import { getLevel, ratingsOfLevel } from "@/lib/themecp/levels";
 import { selectRoundProblems } from "@/lib/themecp/select-problems";
+import { pickWeightedRandomTag } from "@/lib/themecp/tags";
 import {
   type ActiveTraining,
   getActiveTraining,
@@ -27,11 +28,13 @@ export function SmartCTA({
   level,
   gateCandidate,
   todayDone,
+  weakestTag,
 }: {
   handle: string;
   level: number;
   gateCandidate: GateCandidate | null;
   todayDone: boolean;
+  weakestTag: string | null;
 }) {
   const router = useRouter();
   const { problems: pool, isLoading: poolLoading } = useAllProblems();
@@ -77,22 +80,27 @@ export function SmartCTA({
     setStarting(true);
     const levelObj = getLevel(level);
     const ratings = ratingsOfLevel(levelObj);
+    // ThemeCP requires a single shared theme per round. Prefer the user's
+    // weakest tag (mirrors /tags "Focus next on"); fall back to a weighted
+    // random tag for cold-start users with <3 themed rounds anywhere.
+    const theme = weakestTag ?? pickWeightedRandomTag().value;
     const slots = selectRoundProblems({
       pool,
       solvedKeys,
       ratings,
-      tags: [],
+      tags: [theme],
       contestRange: null,
     });
     if (slots.length !== 4 || !slots.every((s) => s.problem)) {
-      // Couldn't fill all four slots with defaults — let the user customize.
+      // Couldn't fill all four slots even after the selector's no-tag
+      // fallbacks — bounce to /training so the user can pick a different theme.
       router.push("/training");
       return;
     }
     const startTime = Date.now() + 10_000;
     const endTime = startTime + Number(levelObj.time) * 60_000;
     const problems = slots.map((s) => s.problem!) as TrainingProblem[];
-    setActiveTraining({ level, startTime, endTime, problems, tagFilter: [] });
+    setActiveTraining({ level, startTime, endTime, problems, tagFilter: [theme] });
     router.push("/round");
   };
 

@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { RefreshCw, Square, Check } from "lucide-react";
+import { RefreshCw, Square, Check, ArrowRight, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CountdownTimer } from "@/components/CountdownTimer";
 import { useSolvedProblems } from "@/hooks/useProblems";
@@ -25,6 +25,14 @@ export function RoundRoom({ handle }: { handle: string }) {
   const [hydrated, setHydrated] = useState(false);
   const [finishing, setFinishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // True once the round has finished (timer expiry, AK auto-finish, or the
+  // Finish-now button). Drives the in-room reveal AND prevents auto-navigating
+  // to /history so the LevelChangeOverlay has time to render.
+  const [roundOver, setRoundOver] = useState(false);
+  // training.id from the POST /api/trainings response. Captured when the
+  // timer-expiry save runs without redirecting, so the "View results" button
+  // can deep-link into the matching history row.
+  const [savedTrainingId, setSavedTrainingId] = useState<string | null>(null);
 
   // Hydrate from localStorage on mount; if there's nothing live, bounce to dashboard.
   useEffect(() => {
@@ -77,13 +85,18 @@ export function RoundRoom({ handle }: { handle: string }) {
     };
   }, [training, handle]);
 
-  // Auto-finish on AK.
+  // Auto-finish on AK. Hold the user in-room (navigate:false) so the
+  // level-up overlay has time to render — they'll click "View results" to go
+  // to /history themselves.
   useEffect(() => {
-    if (!training) return;
+    if (!training || roundOver) return;
     const all = training.problems.every((p) => p.solvedAt !== null);
-    if (all) void finish(true);
+    if (all) {
+      setRoundOver(true);
+      void finish(true, { navigate: false });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [training?.problems]);
+  }, [training?.problems, roundOver]);
 
   const refreshSubmissions = async () => {
     if (!training) return;
@@ -110,8 +123,9 @@ export function RoundRoom({ handle }: { handle: string }) {
     });
   };
 
-  const finish = async (autoAk: boolean) => {
+  const finish = async (autoAk: boolean, opts: { navigate?: boolean } = {}) => {
     if (!training || finishing) return;
+    const navigate = opts.navigate ?? true;
     setFinishing(true);
     try {
       const isAk = autoAk || training.problems.every((p) => p.solvedAt !== null);
@@ -143,8 +157,6 @@ export function RoundRoom({ handle }: { handle: string }) {
       });
       const json = await res.json();
       if (!json.ok) throw new Error(json.error ?? "Failed");
-      clearActiveTraining();
-      setTraining(null);
       emitTrainingFinished({
         isAk,
         performance,
@@ -152,8 +164,17 @@ export function RoundRoom({ handle }: { handle: string }) {
         levelAfter: typeof json.level === "number" ? json.level : training.level,
       });
       await refreshSolved();
-      router.push(`/history?just=${json.training_id}`);
-      router.refresh();
+      if (navigate) {
+        clearActiveTraining();
+        setTraining(null);
+        router.push(`/history?just=${json.training_id}`);
+        router.refresh();
+      } else {
+        // Stay in-room so the reveal is visible. localStorage is left intact
+        // until the user clicks "View results" — getActiveTraining() will
+        // garbage-collect it on the next mount because endTime <= now.
+        setSavedTrainingId(json.training_id);
+      }
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -172,6 +193,9 @@ export function RoundRoom({ handle }: { handle: string }) {
   const isLive = training && Date.now() >= training.startTime && Date.now() < training.endTime;
   const allSolved = training?.problems.every((p) => p.solvedAt !== null);
   const solvedCount = training?.problems.filter((p) => p.solvedAt).length ?? 0;
+  // Tags stay hidden during warmup + live. Revealed once the round is over
+  // (timer expired, AK auto-finish, or Finish-now click).
+  const revealTags = roundOver;
 
   if (!hydrated || !training) {
     return <p className="text-sm text-muted-foreground">Loading round…</p>;
@@ -221,11 +245,17 @@ export function RoundRoom({ handle }: { handle: string }) {
                       {problem.name}
                     </Link>
                   </div>
-                  {problem.tags.length > 0 && (
+                  {problem.tags.length > 0 && revealTags && (
                     <div className="flex flex-wrap gap-1 pl-9 text-[11px] text-muted-foreground">
                       {problem.tags.map((t) => (
                         <span key={t}>#{t}</span>
                       ))}
+                    </div>
+                  )}
+                  {problem.tags.length > 0 && !revealTags && (
+                    <div className="flex items-center gap-1.5 pl-9 text-[10px] uppercase tracking-[0.15em] text-muted-foreground/60">
+                      <EyeOff className="h-3 w-3" />
+                      tags hidden
                     </div>
                   )}
                 </div>
@@ -259,24 +289,42 @@ export function RoundRoom({ handle }: { handle: string }) {
           <CountdownTimer
             startTime={training.startTime}
             endTime={training.endTime}
-            onExpire={() => void finish(false)}
+            onExpire={() => {
+              if (roundOver) return;
+              setRoundOver(true);
+              void finish(false, { navigate: false });
+            }}
           />
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="outline" size="sm" onClick={refreshSubmissions} disabled={!isLive}>
-              <RefreshCw className="h-3.5 w-3.5" />
-              Refresh
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => void finish(allSolved ?? false)}
-              disabled={finishing || !!isWarmup}
-            >
-              Finish now
-            </Button>
-            <Button variant="ghost" size="sm" onClick={stop} disabled={finishing}>
-              <Square className="h-3.5 w-3.5" />
-              Stop
-            </Button>
+            {roundOver ? (
+              <Button asChild size="sm" disabled={finishing}>
+                <Link href={savedTrainingId ? `/history?just=${savedTrainingId}` : "/history"}>
+                  <ArrowRight className="h-3.5 w-3.5" />
+                  {finishing ? "Saving…" : "View results"}
+                </Link>
+              </Button>
+            ) : (
+              <>
+                <Button variant="outline" size="sm" onClick={refreshSubmissions} disabled={!isLive}>
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  Refresh
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    setRoundOver(true);
+                    void finish(allSolved ?? false, { navigate: false });
+                  }}
+                  disabled={finishing || !!isWarmup}
+                >
+                  Finish now
+                </Button>
+                <Button variant="ghost" size="sm" onClick={stop} disabled={finishing}>
+                  <Square className="h-3.5 w-3.5" />
+                  Stop
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </section>

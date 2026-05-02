@@ -15,6 +15,7 @@ export type TrainingRow = {
   is_ak: boolean;
   level_at_start: number;
   level_at_end: number;
+  tag_filter: string[];
 };
 
 export type UserStats = {
@@ -35,6 +36,10 @@ export type UserStats = {
   gateCandidate: GateCandidate | null;
   gateBlocked: boolean;
   recentHeatmap: { date: string; count: number }[];
+  // Lowest-AK-rate tag with at least 3 themed rounds. Null when the user has
+  // not yet built up enough history for the heuristic — caller should fall
+  // back to a weighted random tag.
+  weakestTag: string | null;
 };
 
 function dayKey(d: Date): string {
@@ -89,7 +94,7 @@ export async function getUserStats(): Promise<UserStats | null> {
 
   const { data: trainings } = await supabase
     .from("trainings")
-    .select("started_at, finished_at, performance, is_ak, level_at_start, level_at_end")
+    .select("started_at, finished_at, performance, is_ak, level_at_start, level_at_end, tag_filter")
     .eq("user_id", user.id)
     .order("finished_at", { ascending: false })
     .limit(365);
@@ -152,5 +157,27 @@ export async function getUserStats(): Promise<UserStats | null> {
     gateCandidate,
     gateBlocked: gateCandidate !== null,
     recentHeatmap: buildRecentHeatmap(trainingRows, 30),
+    weakestTag: computeWeakestTag(trainingRows),
   };
+}
+
+// Lowest AK-rate tag with at least 3 themed rounds. Mirrors the "Focus next on"
+// heuristic in app/tags/page.tsx so the dashboard quick-start picks the same
+// tag the user is already being told to drill.
+function computeWeakestTag(rows: TrainingRow[]): string | null {
+  const buckets = new Map<string, { rounds: number; aks: number }>();
+  for (const t of rows) {
+    if (!t.tag_filter || t.tag_filter.length === 0) continue;
+    for (const tag of t.tag_filter) {
+      const b = buckets.get(tag) ?? { rounds: 0, aks: 0 };
+      b.rounds += 1;
+      if (t.is_ak) b.aks += 1;
+      buckets.set(tag, b);
+    }
+  }
+  const eligible = [...buckets.entries()]
+    .filter(([, b]) => b.rounds >= 3)
+    .map(([tag, b]) => ({ tag, akRate: b.aks / b.rounds }))
+    .sort((a, b) => a.akRate - b.akRate);
+  return eligible[0]?.tag ?? null;
 }
