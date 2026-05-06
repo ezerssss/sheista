@@ -124,7 +124,10 @@ export default async function HistoryPage() {
                       </span>
                     )}
                   </div>
-                  <span className="font-mono text-xs text-muted-foreground">
+                  <Link
+                    href={`/round/${t.id}`}
+                    className="font-mono text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                  >
                     {new Date(t.finished_at).toLocaleString(undefined, {
                       year: "numeric",
                       month: "short",
@@ -132,7 +135,7 @@ export default async function HistoryPage() {
                       hour: "2-digit",
                       minute: "2-digit",
                     })}
-                  </span>
+                  </Link>
                 </div>
                 <div className="mt-3 grid grid-cols-2 gap-2 text-sm sm:grid-cols-4">
                   {[...t.training_problems]
