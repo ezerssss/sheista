@@ -14,6 +14,7 @@ type ProfileRow = {
 type TrainingRow = {
   id: string;
   user_id: string;
+  client_round_id: string | null;
   level_at_start: number;
   level_at_end: number;
   is_ak: boolean;
@@ -73,6 +74,7 @@ export type Database = {
         Insert: {
           id?: string;
           user_id: string;
+          client_round_id?: string | null;
           level_at_start: number;
           level_at_end: number;
           is_ak: boolean;

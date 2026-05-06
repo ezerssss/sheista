@@ -1,4 +1,6 @@
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
+import { getAuthedUser, getProfile } from "@/lib/supabase/auth";
 import { computeStreak, type StreakResult } from "@/lib/themecp/streak";
 
 export type GateCandidate = {
@@ -77,29 +79,36 @@ type PrevProblem = {
   solved_at: string | null;
 };
 
-export async function getUserStats(): Promise<UserStats | null> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+export const getUserStats = cache(async (): Promise<UserStats | null> => {
+  const user = await getAuthedUser();
   if (!user) return null;
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("cf_handle, cf_rating, level")
-    .eq("id", user.id)
-    .single();
-
+  const profile = await getProfile();
   if (!profile?.cf_handle) return null;
 
-  const { data: trainings } = await supabase
-    .from("trainings")
-    .select("started_at, finished_at, performance, is_ak, level_at_start, level_at_end, tag_filter")
-    .eq("user_id", user.id)
-    .order("finished_at", { ascending: false })
-    .limit(365);
+  const supabase = await createClient();
 
-  const trainingRows: TrainingRow[] = trainings ?? [];
+  // Parallelize the two table reads — they don't depend on each other.
+  const [trainingsRes, lastTrainingsRes] = await Promise.all([
+    supabase
+      .from("trainings")
+      .select(
+        "started_at, finished_at, performance, is_ak, level_at_start, level_at_end, tag_filter",
+      )
+      .eq("user_id", user.id)
+      .order("finished_at", { ascending: false })
+      .limit(365),
+    supabase
+      .from("trainings")
+      .select(
+        "training_problems(contest_id, problem_index, problem_name, rating, solved_at)",
+      )
+      .eq("user_id", user.id)
+      .order("started_at", { ascending: false })
+      .limit(1),
+  ]);
+
+  const trainingRows: TrainingRow[] = trainingsRes.data ?? [];
   const finishedAtList = trainingRows.map((t) => t.finished_at);
   const streak = computeStreak(finishedAtList);
 
@@ -116,16 +125,7 @@ export async function getUserStats(): Promise<UserStats | null> {
       : Math.round(recentPerf.reduce((a, b) => a + b, 0) / recentPerf.length);
   const lastFinishedAt = trainingRows[0]?.finished_at ?? null;
 
-  const { data: lastTrainings } = await supabase
-    .from("trainings")
-    .select(
-      "training_problems(contest_id, problem_index, problem_name, rating, solved_at)",
-    )
-    .eq("user_id", user.id)
-    .order("started_at", { ascending: false })
-    .limit(1);
-
-  const prev = lastTrainings?.[0] as
+  const prev = lastTrainingsRes.data?.[0] as
     | { training_problems?: PrevProblem[] }
     | undefined;
   const prevUnsolved: PrevProblem[] = (prev?.training_problems ?? []).filter(
@@ -159,7 +159,7 @@ export async function getUserStats(): Promise<UserStats | null> {
     recentHeatmap: buildRecentHeatmap(trainingRows, 30),
     weakestTag: computeWeakestTag(trainingRows),
   };
-}
+});
 
 // Lowest AK-rate tag with at least 3 themed rounds. Mirrors the "Focus next on"
 // heuristic in app/tags/page.tsx so the dashboard quick-start picks the same

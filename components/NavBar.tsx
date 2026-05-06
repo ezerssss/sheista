@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { getAuthedUser, getProfile } from "@/lib/supabase/auth";
 import { LogOutButton } from "@/components/LogOutButton";
 
 const NAV = [
@@ -12,14 +12,9 @@ const NAV = [
 ];
 
 export async function NavBar() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  let handle: string | null = null;
-  if (user) {
-    const { data } = await supabase.from("profiles").select("cf_handle").eq("id", user.id).single();
-    handle = data?.cf_handle ?? null;
-  }
+  const user = await getAuthedUser();
+  const profile = user ? await getProfile() : null;
+  const handle = profile?.cf_handle ?? null;
 
   return (
     <header className="sticky top-0 z-30 border-b border-border/70 bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/65">

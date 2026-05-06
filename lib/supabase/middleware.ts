@@ -2,7 +2,7 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/types/db";
 
-const PROTECTED = ["/dashboard", "/training", "/history", "/heatmap", "/tags", "/upsolve"];
+const PROTECTED = ["/dashboard", "/training", "/history", "/heatmap", "/tags", "/upsolve", "/round"];
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });

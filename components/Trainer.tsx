@@ -15,6 +15,7 @@ import { selectRoundProblems, type SlotResult } from "@/lib/themecp/select-probl
 import {
   type ActiveTraining,
   getActiveTraining,
+  newRoundId,
   setActiveTraining,
 } from "@/lib/themecp/active-training";
 import type { TrainingProblem } from "@/types/themecp";
@@ -115,7 +116,14 @@ export function Trainer({ handle, level: initialLevel }: { handle: string; level
     const startTime = Date.now() + 10_000;
     const endTime = startTime + Number(levelObj.time) * 60_000;
     const problems = slots.map((s) => s.problem!) as TrainingProblem[];
-    const training: ActiveTraining = { level, startTime, endTime, problems, tagFilter };
+    const training: ActiveTraining = {
+      id: newRoundId(),
+      level,
+      startTime,
+      endTime,
+      problems,
+      tagFilter,
+    };
     setActiveTraining(training);
     router.push("/round");
   };

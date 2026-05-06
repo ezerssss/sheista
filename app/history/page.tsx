@@ -3,12 +3,12 @@ import { redirect } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import { ProgressLineChart, LevelLineChart } from "@/components/ProgressLineChart";
 import { createClient } from "@/lib/supabase/server";
+import { getAuthedUser } from "@/lib/supabase/auth";
 
 export const dynamic = "force-dynamic";
 
 export default async function HistoryPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getAuthedUser();
   if (!user) redirect("/auth/login?next=/history");
 
   type Row = {
@@ -29,22 +29,24 @@ export default async function HistoryPage() {
       solved_at: string | null;
     }[];
   };
-  const { data: trainings } = await supabase
-    .from("trainings")
-    .select("id, started_at, finished_at, performance, is_ak, level_at_start, level_at_end, tag_filter, training_problems(slot, contest_id, problem_index, problem_name, rating, solved_at)")
-    .eq("user_id", user.id)
-    .order("started_at", { ascending: false })
-    .limit(200);
+  const supabase = await createClient();
+  const [trainingsRes, upsolvedRes] = await Promise.all([
+    supabase
+      .from("trainings")
+      .select("id, started_at, finished_at, performance, is_ak, level_at_start, level_at_end, tag_filter, training_problems(slot, contest_id, problem_index, problem_name, rating, solved_at)")
+      .eq("user_id", user.id)
+      .order("started_at", { ascending: false })
+      .limit(100),
+    supabase
+      .from("upsolve_problems")
+      .select("contest_id, problem_index")
+      .eq("user_id", user.id)
+      .not("solved_at", "is", null),
+  ]);
 
-  const list = (trainings ?? []) as unknown as Row[];
-
-  const { data: upsolved } = await supabase
-    .from("upsolve_problems")
-    .select("contest_id, problem_index")
-    .eq("user_id", user.id)
-    .not("solved_at", "is", null);
+  const list = (trainingsRes.data ?? []) as unknown as Row[];
   const upsolvedSet = new Set(
-    (upsolved ?? []).map((u) => `${u.contest_id}_${u.problem_index}`),
+    (upsolvedRes.data ?? []).map((u) => `${u.contest_id}_${u.problem_index}`),
   );
 
   const chartData = [...list]

@@ -1,22 +1,23 @@
 import { redirect } from "next/navigation";
 import { TagMasteryChart } from "@/components/TagMasteryChart";
 import { createClient } from "@/lib/supabase/server";
+import { getAuthedUser } from "@/lib/supabase/auth";
 import { computeTagStats } from "@/lib/themecp/tag-stats";
 import type { TrainingRecord } from "@/types/themecp";
 
 export const dynamic = "force-dynamic";
 
 export default async function TagsPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getAuthedUser();
   if (!user) redirect("/auth/login?next=/tags");
 
+  const supabase = await createClient();
   const { data } = await supabase
     .from("trainings")
     .select("id, level_at_start, level_at_end, is_ak, performance, tag_filter, started_at, ends_at, finished_at, training_problems(slot, contest_id, problem_index, rating, tags, solved_at)")
     .eq("user_id", user.id)
     .order("finished_at", { ascending: false })
-    .limit(1000);
+    .limit(500);
 
   const trainings = ((data ?? []) as unknown) as TrainingRecord[];
   const stats = computeTagStats(trainings);

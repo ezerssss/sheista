@@ -46,9 +46,12 @@ export function RoundRoom({ handle }: { handle: string }) {
   }, [router]);
 
   // Persist any in-memory edits back to localStorage so a refresh keeps state.
+  // Skip once roundOver flips — at that point we are about to (or already did)
+  // call clearActiveTraining(), and persisting a stale copy would resurrect the
+  // round on the next /round mount and re-trigger AK auto-finish.
   useEffect(() => {
-    if (training) persistActiveTraining(training);
-  }, [training]);
+    if (training && !roundOver) persistActiveTraining(training);
+  }, [training, roundOver]);
 
   // Auto-detect AK polling.
   const pollRef = useRef<number | null>(null);
@@ -138,6 +141,7 @@ export function RoundRoom({ handle }: { handle: string }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          client_round_id: training.id,
           level_at_start: training.level,
           tag_filter: training.tagFilter,
           started_at: training.startTime,
@@ -157,6 +161,11 @@ export function RoundRoom({ handle }: { handle: string }) {
       });
       const json = await res.json();
       if (!json.ok) throw new Error(json.error ?? "Failed");
+      // Always purge the localStorage record once the server has accepted the
+      // round — this is the only thing that prevents browser-back / direct URL
+      // re-entry from re-mounting RoundRoom and re-firing AK auto-finish.
+      // Server-side dedupe (client_round_id) is the second line of defense.
+      clearActiveTraining();
       emitTrainingFinished({
         isAk,
         performance,
@@ -165,14 +174,10 @@ export function RoundRoom({ handle }: { handle: string }) {
       });
       await refreshSolved();
       if (navigate) {
-        clearActiveTraining();
         setTraining(null);
         router.push(`/history?just=${json.training_id}`);
         router.refresh();
       } else {
-        // Stay in-room so the reveal is visible. localStorage is left intact
-        // until the user clicks "View results" — getActiveTraining() will
-        // garbage-collect it on the next mount because endTime <= now.
         setSavedTrainingId(json.training_id);
       }
     } catch (e) {

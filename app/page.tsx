@@ -1,12 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { createClient } from "@/lib/supabase/server";
+import { getAuthedUser, getProfile } from "@/lib/supabase/auth";
 import { HandleSetup } from "@/components/HandleSetup";
 
 export default async function Home() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getAuthedUser();
 
   if (!user) {
     return (
@@ -77,7 +76,7 @@ export default async function Home() {
     );
   }
 
-  const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+  const profile = await getProfile();
 
   if (profile?.cf_handle) redirect("/dashboard");
 

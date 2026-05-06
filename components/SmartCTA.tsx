@@ -12,6 +12,7 @@ import { allTags } from "@/lib/themecp/tags";
 import {
   type ActiveTraining,
   getActiveTraining,
+  newRoundId,
   setActiveTraining,
 } from "@/lib/themecp/active-training";
 import type { TrainingProblem } from "@/types/themecp";
@@ -104,6 +105,7 @@ export function SmartCTA({
       const startTime = Date.now() + 10_000;
       const endTime = startTime + Number(levelObj.time) * 60_000;
       setActiveTraining({
+        id: newRoundId(),
         level,
         startTime,
         endTime,

@@ -1,12 +1,11 @@
 import { redirect } from "next/navigation";
 import { UpsolveList } from "@/components/UpsolveList";
-import { createClient } from "@/lib/supabase/server";
+import { getAuthedUser } from "@/lib/supabase/auth";
 
 export const dynamic = "force-dynamic";
 
 export default async function UpsolvePage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getAuthedUser();
   if (!user) redirect("/auth/login?next=/upsolve");
   return <UpsolveList />;
 }

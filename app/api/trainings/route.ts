@@ -15,6 +15,7 @@ const ProblemSchema = z.object({
 });
 
 const Body = z.object({
+  client_round_id: z.string().uuid().optional(),
   level_at_start: z.number().int().min(1).max(109),
   tag_filter: z.array(z.string()).default([]),
   started_at: z.number(), // ms
@@ -36,6 +37,33 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "Bad input", details: parsed.error.format() }, { status: 400 });
   }
   const body = parsed.data;
+
+  // Idempotency: if this round has already been recorded (back-button revival,
+  // double-submit, retry on flaky network), return the existing row instead of
+  // inserting a duplicate. Match on client_round_id when present, otherwise
+  // fall back to (started_at, ends_at) — guaranteed unique per real round.
+  const existingResp = body.client_round_id
+    ? await supabase
+        .from("trainings")
+        .select("id, level_at_end")
+        .eq("user_id", user.id)
+        .eq("client_round_id", body.client_round_id)
+        .maybeSingle()
+    : await supabase
+        .from("trainings")
+        .select("id, level_at_end")
+        .eq("user_id", user.id)
+        .eq("started_at", new Date(body.started_at).toISOString())
+        .eq("ends_at", new Date(body.ends_at).toISOString())
+        .maybeSingle();
+  if (existingResp.data) {
+    return NextResponse.json({
+      ok: true,
+      training_id: existingResp.data.id,
+      level: existingResp.data.level_at_end,
+      deduped: true,
+    });
+  }
 
   // Upsolve gate: refuse to record a new round if the previous round's easiest
   // unsolved problem is still unsolved on Codeforces. Mirrors the client gate.
@@ -82,6 +110,7 @@ export async function POST(request: Request) {
     .from("trainings")
     .insert({
       user_id: user.id,
+      client_round_id: body.client_round_id ?? null,
       level_at_start: body.level_at_start,
       level_at_end: newLevel,
       is_ak: body.is_ak,

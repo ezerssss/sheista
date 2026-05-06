@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { CalendarHeatmap } from "@/components/CalendarHeatmap";
 import { createClient } from "@/lib/supabase/server";
+import { getAuthedUser } from "@/lib/supabase/auth";
 import { computeStreak } from "@/lib/themecp/streak";
 import { StreakCard } from "@/components/StreakCard";
 
@@ -10,16 +11,19 @@ const fmt = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
 export default async function HeatmapPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const user = await getAuthedUser();
   if (!user) redirect("/auth/login?next=/heatmap");
 
+  const supabase = await createClient();
+  // The visible heatmap window is ±182 days = 365 days. Pulling 2000 rows was
+  // gratuitous; cap at 730 (2 years) so streak history past the visible window
+  // is still respected without bloating the response.
   const { data: trainings } = await supabase
     .from("trainings")
     .select("finished_at, is_ak")
     .eq("user_id", user.id)
     .order("finished_at", { ascending: false })
-    .limit(2000);
+    .limit(730);
 
   const counts = new Map<string, number>();
   for (const t of trainings ?? []) {
