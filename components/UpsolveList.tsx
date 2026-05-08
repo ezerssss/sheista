@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,6 +18,7 @@ type Item = {
 };
 
 export function UpsolveList() {
+  const router = useRouter();
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -33,6 +35,10 @@ export function UpsolveList() {
     setRefreshing(true);
     await fetch("/api/upsolve", { method: "POST" });
     await load();
+    // Sync may have flipped solved_at on items the dashboard's gate query and
+    // /history's upsolved set both depend on — bust the router cache so those
+    // pages don't show pre-sync state on next navigation.
+    router.refresh();
     setRefreshing(false);
   };
 

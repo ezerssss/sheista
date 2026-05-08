@@ -72,6 +72,10 @@ export function Trainer({ handle, level: initialLevel }: { handle: string; level
         refreshLast(),
         fetch("/api/upsolve", { method: "POST" }).catch(() => null),
       ]);
+      // The gate POST may have flipped a previous round's unsolved problem to
+      // solved server-side — bust the router cache so dashboard/history/etc
+      // reflect the new gateCandidate on next navigation.
+      router.refresh();
     } finally {
       setCheckingGate(false);
     }

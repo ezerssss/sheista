@@ -173,10 +173,14 @@ export function RoundRoom({ handle }: { handle: string }) {
         levelAfter: typeof json.level === "number" ? json.level : training.level,
       });
       await refreshSolved();
+      // Invalidate the Next.js router cache so any subsequent navigation
+      // (View results, dashboard, heatmap, tags, …) re-renders with the
+      // post-round profile.level, streak, and training counts. Without this
+      // the user sees pre-round numbers until a hard reload.
+      router.refresh();
       if (navigate) {
         setTraining(null);
         router.push(`/history?just=${json.training_id}`);
-        router.refresh();
       } else {
         setSavedTrainingId(json.training_id);
       }
