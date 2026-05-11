@@ -35,7 +35,7 @@ export type UserStats = {
   avgRecentPerf: number;
   recentPerf: number[];
   lastFinishedAt: string | null;
-  gateCandidate: GateCandidate | null;
+  gateCandidates: GateCandidate[];
   gateBlocked: boolean;
   recentHeatmap: { date: string; count: number }[];
   // Lowest-AK-rate tag with at least 3 themed rounds. Null when the user has
@@ -131,13 +131,14 @@ export const getUserStats = cache(async (): Promise<UserStats | null> => {
   const prevUnsolved: PrevProblem[] = (prev?.training_problems ?? []).filter(
     (p) => !p.solved_at,
   );
-  const gateCandidate: GateCandidate | null =
-    prevUnsolved.length === 0
-      ? null
-      : prevUnsolved.reduce(
-          (min, p) => (p.rating < min.rating ? p : min),
-          prevUnsolved[0],
-        );
+  const gateCandidates: GateCandidate[] = prevUnsolved
+    .map((p) => ({
+      contest_id: p.contest_id,
+      problem_index: p.problem_index,
+      problem_name: p.problem_name,
+      rating: p.rating,
+    }))
+    .sort((a, b) => a.rating - b.rating);
 
   return {
     userId: user.id,
@@ -154,8 +155,8 @@ export const getUserStats = cache(async (): Promise<UserStats | null> => {
     avgRecentPerf,
     recentPerf,
     lastFinishedAt,
-    gateCandidate,
-    gateBlocked: gateCandidate !== null,
+    gateCandidates,
+    gateBlocked: gateCandidates.length > 0,
     recentHeatmap: buildRecentHeatmap(trainingRows, 30),
     weakestTag: computeWeakestTag(trainingRows),
   };

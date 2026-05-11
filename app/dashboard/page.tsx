@@ -27,7 +27,7 @@ export default async function DashboardPage() {
     totalAk,
     akRate,
     avgRecentPerf,
-    gateCandidate,
+    gateCandidates,
     weakestTag,
   } = stats;
 
@@ -66,7 +66,7 @@ export default async function DashboardPage() {
           <SmartCTA
             handle={profile.cf_handle}
             level={profile.level}
-            gateCandidate={gateCandidate}
+            gateCandidates={gateCandidates}
             todayDone={streak.todayDone}
             weakestTag={weakestTag}
           />

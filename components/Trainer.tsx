@@ -49,19 +49,17 @@ export function Trainer({ handle, level: initialLevel }: { handle: string; level
     [solved],
   );
 
-  // Gate: after a non-AK round, force the user to upsolve the easiest unsolved
-  // problem before they can start a new round (matches the ThemeCP proposal).
-  const gateProblem = useMemo(() => {
-    if (!lastTraining) return null;
-    const unsolved = lastTraining.training_problems.filter((p) => !p.solved_at);
-    if (unsolved.length === 0) return null;
-    return unsolved.reduce((min, p) => (p.rating < min.rating ? p : min), unsolved[0]);
-  }, [lastTraining]);
+  // Gate: after a non-AK round, force the user to upsolve EVERY unsolved
+  // problem from the last round before they can start a new one.
+  const gateProblems = useMemo(() => {
+    if (!lastTraining) return [];
+    return lastTraining.training_problems
+      .filter((p) => !p.solved_at)
+      .filter((p) => !solvedKeys.has(`${p.contest_id}_${p.problem_index}`))
+      .sort((a, b) => a.rating - b.rating);
+  }, [lastTraining, solvedKeys]);
 
-  const gateBlocked = useMemo(() => {
-    if (!gateProblem) return false;
-    return !solvedKeys.has(`${gateProblem.contest_id}_${gateProblem.problem_index}`);
-  }, [gateProblem, solvedKeys]);
+  const gateBlocked = gateProblems.length > 0;
 
   const [checkingGate, setCheckingGate] = useState(false);
   const checkGate = async () => {
@@ -151,36 +149,44 @@ export function Trainer({ handle, level: initialLevel }: { handle: string; level
         </p>
       </header>
 
-      {gateBlocked && gateProblem && (
+      {gateBlocked && (
         <section className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="space-y-2">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="space-y-3">
               <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
                 <AlertCircle className="h-4 w-4" />
-                <p className="label-eyebrow">Upsolve required</p>
+                <p className="label-eyebrow">
+                  Upsolve required — {gateProblems.length} problem
+                  {gateProblems.length === 1 ? "" : "s"} left
+                </p>
               </div>
               <p className="text-sm">
-                Solve the easiest problem you missed last round before starting a new one — that&apos;s
-                the ThemeCP rule.
+                Solve every problem you missed last round before starting a new one.
               </p>
-              <Link
-                href={`https://codeforces.com/contest/${gateProblem.contest_id}/problem/${gateProblem.problem_index}`}
-                target="_blank"
-                className="inline-flex items-center gap-2 text-sm font-medium underline-offset-4 hover:underline"
-              >
-                <span className="font-mono text-xs text-muted-foreground">
-                  {gateProblem.rating}
-                </span>
-                <span className="font-mono text-muted-foreground">
-                  {gateProblem.contest_id}
-                  {gateProblem.problem_index}
-                </span>{" "}
-                {gateProblem.problem_name || "Problem"}
-              </Link>
+              <ul className="space-y-1">
+                {gateProblems.map((p) => (
+                  <li key={`${p.contest_id}_${p.problem_index}`}>
+                    <Link
+                      href={`https://codeforces.com/contest/${p.contest_id}/problem/${p.problem_index}`}
+                      target="_blank"
+                      className="inline-flex items-center gap-2 text-sm font-medium underline-offset-4 hover:underline"
+                    >
+                      <span className="font-mono text-xs text-muted-foreground">
+                        {p.rating}
+                      </span>
+                      <span className="font-mono text-muted-foreground">
+                        {p.contest_id}
+                        {p.problem_index}
+                      </span>{" "}
+                      {p.problem_name || "Problem"}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
             </div>
             <Button variant="outline" size="sm" onClick={checkGate} disabled={checkingGate}>
               <RefreshCw className="h-3.5 w-3.5" />
-              {checkingGate ? "Checking…" : "I solved it"}
+              {checkingGate ? "Checking…" : "I solved them"}
             </Button>
           </div>
         </section>

@@ -27,13 +27,13 @@ export type GateCandidate = {
 export function SmartCTA({
   handle,
   level,
-  gateCandidate,
+  gateCandidates,
   todayDone,
   weakestTag,
 }: {
   handle: string;
   level: number;
-  gateCandidate: GateCandidate | null;
+  gateCandidates: GateCandidate[];
   todayDone: boolean;
   weakestTag: string | null;
 }) {
@@ -50,7 +50,7 @@ export function SmartCTA({
     setChecking(true);
     try {
       // Re-pull CF solved set + sync upsolve table; router.refresh re-runs the
-      // dashboard's server query so gateCandidate also updates if needed.
+      // dashboard's server query so gateCandidates also updates if needed.
       await Promise.all([
         refreshSolved(),
         fetch("/api/upsolve", { method: "POST" }).catch(() => null),
@@ -71,10 +71,14 @@ export function SmartCTA({
     [solved],
   );
 
-  const gateBlocked = useMemo(() => {
-    if (!gateCandidate) return false;
-    return !solvedKeys.has(`${gateCandidate.contest_id}_${gateCandidate.problem_index}`);
-  }, [gateCandidate, solvedKeys]);
+  const unsolvedGate = useMemo(
+    () =>
+      gateCandidates.filter(
+        (g) => !solvedKeys.has(`${g.contest_id}_${g.problem_index}`),
+      ),
+    [gateCandidates, solvedKeys],
+  );
+  const gateBlocked = unsolvedGate.length > 0;
 
   const quickStart = () => {
     if (poolLoading || pool.length === 0) return;
@@ -211,23 +215,43 @@ export function SmartCTA({
     );
   }
 
-  if (gateBlocked && gateCandidate) {
+  if (gateBlocked) {
     return (
-      <div className="flex flex-wrap items-center gap-2">
-        <Button asChild size="lg" variant="outline" className="border-amber-500/60 text-amber-700 dark:text-amber-300">
-          <Link
-            href={`https://codeforces.com/contest/${gateCandidate.contest_id}/problem/${gateCandidate.problem_index}`}
-            target="_blank"
-          >
-            <AlertTriangle className="h-4 w-4" />
-            Upsolve {gateCandidate.contest_id}
-            {gateCandidate.problem_index}
-          </Link>
-        </Button>
-        <Button onClick={checkGate} disabled={checking} variant="ghost" size="lg">
-          <RefreshCw className="h-4 w-4" />
-          {checking ? "Checking…" : "I solved it"}
-        </Button>
+      <div className="flex flex-col gap-2">
+        <div className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
+          <AlertTriangle className="h-4 w-4" />
+          <span className="label-eyebrow">
+            Upsolve {unsolvedGate.length} problem{unsolvedGate.length === 1 ? "" : "s"} to unlock
+          </span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {unsolvedGate.map((g) => (
+            <Button
+              key={`${g.contest_id}_${g.problem_index}`}
+              asChild
+              size="sm"
+              variant="outline"
+              className="border-amber-500/60 text-amber-700 dark:text-amber-300"
+            >
+              <Link
+                href={`https://codeforces.com/contest/${g.contest_id}/problem/${g.problem_index}`}
+                target="_blank"
+              >
+                <span className="font-mono text-[10px] text-muted-foreground">
+                  {g.rating}
+                </span>
+                <span className="font-mono">
+                  {g.contest_id}
+                  {g.problem_index}
+                </span>
+              </Link>
+            </Button>
+          ))}
+          <Button onClick={checkGate} disabled={checking} variant="ghost" size="sm">
+            <RefreshCw className="h-3.5 w-3.5" />
+            {checking ? "Checking…" : "I solved them"}
+          </Button>
+        </div>
       </div>
     );
   }

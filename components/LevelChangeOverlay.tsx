@@ -19,8 +19,6 @@ import { PetSprite } from "@/components/pet/PetSprite";
 import { ShareDialog } from "@/components/share/ShareDialog";
 import type { ShareCardData, ShareTemplate } from "@/components/share/types";
 
-const AUTO_DISMISS_MS = 12_000;
-
 export function LevelChangeOverlay() {
   const { state } = usePetState();
   const [event, setEvent] = useState<TrainingFinishedDetail | null>(null);
@@ -35,13 +33,6 @@ export function LevelChangeOverlay() {
       }
     });
   }, []);
-
-  // Auto-dismiss the overlay after a while if untouched.
-  useEffect(() => {
-    if (!event || shareOpen) return;
-    const t = window.setTimeout(() => setEvent(null), AUTO_DISMISS_MS);
-    return () => window.clearTimeout(t);
-  }, [event, shareOpen]);
 
   const close = () => {
     setEvent(null);
