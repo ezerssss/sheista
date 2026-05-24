@@ -4,6 +4,7 @@ import { LogOutButton } from "@/components/LogOutButton";
 
 const NAV = [
   { href: "/dashboard", label: "dashboard" },
+  { href: "/ladder", label: "ladder" },
   { href: "/training", label: "training" },
   { href: "/history", label: "history" },
   { href: "/heatmap", label: "heatmap" },

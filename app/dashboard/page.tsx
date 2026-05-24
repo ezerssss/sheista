@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { LevelDisplay } from "@/components/LevelDisplay";
 import { StreakCard } from "@/components/StreakCard";
 import { CalendarHeatmap } from "@/components/CalendarHeatmap";
@@ -85,9 +86,12 @@ export default async function DashboardPage() {
       </header>
 
       <section className="grid divide-y divide-border rounded-lg border border-border md:grid-cols-3 md:divide-x md:divide-y-0">
-        <div className="p-6">
+        <Link
+          href="/ladder"
+          className="block p-6 transition-colors hover:bg-muted/30"
+        >
           <LevelDisplay level={profile.level} />
-        </div>
+        </Link>
         <div className="p-6">
           <StreakCard
             current={streak.current}
