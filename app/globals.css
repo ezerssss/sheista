@@ -129,38 +129,43 @@
 .dark .react-calendar-heatmap .color-scale-3 { fill: #26a641; }
 .dark .react-calendar-heatmap .color-scale-4 { fill: #39d353; }
 
-/* Pet companion — pixel-art keyframes. Transform/opacity only (compositor-only). */
-@keyframes pet-idle-bob {
-  0%, 100% { transform: translateY(0); }
-  50%      { transform: translateY(-2px); }
-}
-@keyframes pet-celebrate {
-  0%, 100% { transform: translateY(0) rotate(0); }
-  25%      { transform: translateY(-8px) rotate(-6deg); }
-  75%      { transform: translateY(-8px) rotate(6deg); }
-}
-@keyframes pet-urgent {
-  0%, 100% { transform: translateX(0) rotate(0); }
-  20%      { transform: translateX(-1px) rotate(-3deg); }
-  60%      { transform: translateX(1px) rotate(3deg); }
-}
+/* Pet companion — pixel-art keyframes. Transform/opacity only (compositor-only).
+   Translate units inside the sprite SVG are viewBox cells (1px = 1 cell). */
 @keyframes pet-zzz {
   0%   { opacity: 0; transform: translate(0, 0); }
   50%  { opacity: 1; }
-  100% { opacity: 0; transform: translate(8px, -14px); }
+  100% { opacity: 0; transform: translate(2px, -3px); }
 }
 @keyframes pet-sparkle {
-  0%   { opacity: 0; transform: scale(0.5); }
-  50%  { opacity: 1; transform: scale(1); }
-  100% { opacity: 0; transform: scale(0.5) translateY(-10px); }
+  0%   { opacity: 0; }
+  50%  { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-2px); }
+}
+@keyframes pet-dust {
+  0%   { opacity: 0.7; transform: translate(0, 0); }
+  100% { opacity: 0; transform: translate(-1.5px, -1.5px); }
+}
+@keyframes pet-feather {
+  0%   { opacity: 0.9; transform: translate(0, 0); }
+  30%  { transform: translate(-1.5px, 3px); }
+  60%  { transform: translate(1px, 6px); }
+  100% { opacity: 0; transform: translate(-1px, 9px); }
 }
 @keyframes bubble-in {
   0%   { opacity: 0; transform: translateY(4px) scale(0.96); }
   100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 
+/* Particle classes (not inline styles) so reduced-motion can gate them. */
+.pet-particle-zzz { animation: pet-zzz 2.4s ease-out infinite; }
+.pet-particle-sparkle { animation: pet-sparkle 1.4s ease-in-out infinite; }
+.pet-particle-dust { animation: pet-dust 0.5s ease-out 1 forwards; }
+.pet-particle-dust-loop { animation: pet-dust 0.4s ease-out infinite; }
+.pet-particle-feather { animation: pet-feather 0.9s ease-in 1 forwards; }
+
 @media (prefers-reduced-motion: reduce) {
-  .pet-anim-idle, .pet-anim-celebrate, .pet-anim-urgent { animation: none !important; }
+  .pet-particle-zzz, .pet-particle-sparkle { animation: none !important; }
+  .pet-particle-dust, .pet-particle-dust-loop, .pet-particle-feather { display: none; }
 }
 
 @layer utilities {

@@ -14,20 +14,33 @@ import {
   type MoodContext,
 } from "@/lib/pet/personality";
 import { onTrainingFinished, type TrainingFinishedDetail } from "@/lib/pet/events";
-import { PetSprite } from "@/components/pet/PetSprite";
+import {
+  PetSprite,
+  PET_GRID,
+  type PetAction,
+  type PetEffect,
+} from "@/components/pet/PetSprite";
 import { PetBubble, type BubbleAction } from "@/components/pet/PetBubble";
 import { PetMenu } from "@/components/pet/PetMenu";
 
 const MUTED_KEY = "sheista:pet-muted";
 const HIDDEN_KEY = "sheista:pet-hidden-session";
 const CELEBRATE_MS = 8_000;
-const PIXEL_SIZE = 4;
-const PET_SIZE = 16 * PIXEL_SIZE; // 64px sprite
-const GROUND_OFFSET = 16; // px from bottom of viewport
+const PIXEL_SIZE = 3;
+const PET_SIZE = PET_GRID * PIXEL_SIZE; // 72px sprite
+const GROUND_OFFSET = 2; // px from bottom of viewport — feet on the edge
 const WALK_SPEED = 80; // px/sec horizontal
-const HOP_SPEED = 240; // px/sec vertical (faster — chickens hop)
+const RUN_SPEED = 200; // px/sec when the target is far
+const RUN_THRESHOLD = 220; // start running beyond this |dx|
+const RUN_STOP = 60; // hysteresis: drop back to a walk under this
+const FLY_SPEED = 160; // px/sec ascending to a perch
+const GLIDE_SPEED = 120; // px/sec descending
+const FLY_DRIFT = 40; // px/sec horizontal correction while ascending
 const ARRIVE_X = 2;
 const ARRIVE_Y = 1;
+
+// While moving, the sprite action comes from locomotion; otherwise from mood.
+type MoveAction = Extract<PetAction, "walk" | "run" | "fly" | "glide">;
 
 // Time-based perch behavior.
 const STAY_ON_PERCH_PROB = 0.7; // chance of pacing on current perch instead of leaving
@@ -60,7 +73,11 @@ export function PetCompanion() {
   const [menuOpen, setMenuOpen] = useState(false);
 
   const [facing, setFacing] = useState<"left" | "right">("left");
-  const [walking, setWalking] = useState(false);
+  const [moveAction, setMoveAction] = useState<MoveAction | null>(null);
+  const [airborne, setAirborne] = useState(false);
+  const [effect, setEffect] = useState<PetEffect>(null);
+  const [reducedMotion, setReducedMotion] = useState(false);
+  const effectKey = useRef(0);
 
   // Position (refs only — written directly to DOM in rAF to avoid re-renders).
   const xRef = useRef(0);
@@ -81,6 +98,11 @@ export function PetCompanion() {
     setHidden(sessionStorage.getItem(HIDDEN_KEY) === "1");
     setActive(getActiveTraining());
 
+    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
+    setReducedMotion(mq.matches);
+    const onChange = (e: MediaQueryListEvent) => setReducedMotion(e.matches);
+    mq.addEventListener("change", onChange);
+
     const startX = window.innerWidth - PET_SIZE - 24;
     xRef.current = startX;
     yRef.current = 0;
@@ -88,6 +110,7 @@ export function PetCompanion() {
       containerRef.current.style.left = `${startX}px`;
       containerRef.current.style.bottom = `${GROUND_OFFSET}px`;
     }
+    return () => mq.removeEventListener("change", onChange);
   }, []);
 
   // Re-poll localStorage for active training every 5s.
@@ -181,55 +204,81 @@ export function PetCompanion() {
   }, [state, active, recentlyFinished]);
 
   // Movement loop (rAF). Writes position directly to the DOM so we don't
-  // re-render the React tree at 60fps.
+  // re-render the React tree at 60fps; React state (action/facing/airborne)
+  // is only touched on transitions.
   useEffect(() => {
     if (!mounted) return;
     let raf = 0;
     let lastTime = performance.now();
-    let lastWalking = walking;
-    let lastFacing: "left" | "right" = facing;
+    let lastMove: MoveAction | null = null;
+    let lastFacing: "left" | "right" = "left";
+    let running = false;
+
+    const fireEffect = (kind: "dust" | "feather") => {
+      effectKey.current += 1;
+      setEffect({ kind, key: effectKey.current });
+    };
 
     const tick = (now: number) => {
       const dt = Math.min((now - lastTime) / 1000, 0.05);
       lastTime = now;
 
       const tgt = targetRef.current;
-      let isWalking = false;
+      let move: MoveAction | null = null;
 
       if (tgt !== null) {
         const dx = tgt.x - xRef.current;
         const dy = tgt.y - yRef.current;
         const adx = Math.abs(dx);
         const ady = Math.abs(dy);
-        const goingDown = dy < 0;
-        const goingUp = dy > 0;
 
-        // Movement priority:
-        //  - hop DOWN before walking (chicken jumps off perch first)
-        //  - walk X first when going UP to a perch (align horizontally first)
-        //  - same level: just walk X
-        if (goingDown && ady > ARRIVE_Y) {
-          const stepY = Math.min(ady, HOP_SPEED * dt);
-          yRef.current += Math.sign(dy) * stepY;
-        } else if (adx > ARRIVE_X) {
-          const stepX = Math.min(adx, WALK_SPEED * dt);
-          xRef.current += Math.sign(dx) * stepX;
-          isWalking = true;
-          // Update facing when actively moving.
+        const faceToward = () => {
           const newFacing = dx > 0 ? "right" : "left";
           if (newFacing !== lastFacing) {
             lastFacing = newFacing;
             setFacing(newFacing);
           }
-        } else if (goingUp && ady > ARRIVE_Y) {
-          const stepY = Math.min(ady, HOP_SPEED * dt);
-          yRef.current += Math.sign(dy) * stepY;
+        };
+
+        // Movement priority:
+        //  - glide DOWN off a perch first (diagonal — x corrects mid-air)
+        //  - then cover X on foot: run when far, walk when close
+        //  - then fly UP to the perch (slight x drift allowed)
+        if (dy < 0 && ady > ARRIVE_Y) {
+          yRef.current -= Math.min(ady, GLIDE_SPEED * dt);
+          if (adx > ARRIVE_X) {
+            xRef.current += Math.sign(dx) * Math.min(adx, WALK_SPEED * dt);
+            faceToward();
+          }
+          move = "glide";
+        } else if (adx > ARRIVE_X) {
+          if (running ? adx < RUN_STOP : adx > RUN_THRESHOLD) running = !running;
+          const speed = running ? RUN_SPEED : WALK_SPEED;
+          xRef.current += Math.sign(dx) * Math.min(adx, speed * dt);
+          faceToward();
+          move = running ? "run" : "walk";
+        } else if (dy > ARRIVE_Y) {
+          yRef.current += Math.min(ady, FLY_SPEED * dt);
+          if (adx > 0.5) {
+            xRef.current += Math.sign(dx) * Math.min(adx, FLY_DRIFT * dt);
+          }
+          move = "fly";
         } else {
           // Arrived. Lock onto perch if applicable.
+          running = false;
           if (tgt.element && perchedOn.current !== tgt.element) {
             perchedOn.current = tgt.element;
           }
         }
+
+        // Solid landing: coming out of the air, plant the feet exactly.
+        const wasAirborne = lastMove === "fly" || lastMove === "glide";
+        const isAirborne = move === "fly" || move === "glide";
+        if (wasAirborne && !isAirborne) {
+          yRef.current = tgt.y;
+          fireEffect("dust");
+        }
+        if (!wasAirborne && move === "fly") fireEffect("feather");
 
         if (containerRef.current) {
           containerRef.current.style.left = `${xRef.current}px`;
@@ -237,9 +286,12 @@ export function PetCompanion() {
         }
       }
 
-      if (isWalking !== lastWalking) {
-        lastWalking = isWalking;
-        setWalking(isWalking);
+      if (move !== lastMove) {
+        const isAirborne = move === "fly" || move === "glide";
+        const wasAirborne = lastMove === "fly" || lastMove === "glide";
+        if (isAirborne !== wasAirborne) setAirborne(isAirborne);
+        lastMove = move;
+        setMoveAction(move);
       }
 
       raf = window.requestAnimationFrame(tick);
@@ -247,12 +299,13 @@ export function PetCompanion() {
 
     raf = window.requestAnimationFrame(tick);
     return () => window.cancelAnimationFrame(raf);
-  }, [mounted, walking, facing]);
+  }, [mounted]);
 
   // Target picker — re-scans on route change, then re-picks on a schedule.
   // Faster cadence when perched (pacing back and forth on a button).
   useEffect(() => {
     if (!mounted) return;
+    if (reducedMotion) return; // stays put — no roaming under reduced motion
     if (mood === "sleepy") return;
 
     const pickAndSchedule = () => {
@@ -270,7 +323,7 @@ export function PetCompanion() {
       if (targetTimer.current) window.clearTimeout(targetTimer.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mounted, pathname, mood]);
+  }, [mounted, pathname, mood, reducedMotion]);
 
   function pickNewTarget() {
     if (typeof window === "undefined") return;
@@ -404,6 +457,10 @@ export function PetCompanion() {
   const initialLeft = xRef.current || (window.innerWidth - PET_SIZE - 24);
   const initialBottom = (yRef.current || 0) + GROUND_OFFSET;
 
+  // Locomotion wins; otherwise mood decides between sleeping and standing.
+  const action: PetAction =
+    moveAction ?? (mood === "sleepy" ? "sleep" : "stand");
+
   return (
     <div
       ref={containerRef}
@@ -415,6 +472,21 @@ export function PetCompanion() {
         bottom: `${initialBottom}px`,
       }}
     >
+      {/* Ground-contact shadow; lifts away while airborne. */}
+      <div
+        aria-hidden
+        className="absolute left-1/2 rounded-full"
+        style={{
+          bottom: -2,
+          width: PET_SIZE * 0.6,
+          height: 7,
+          background:
+            "radial-gradient(ellipse, hsl(0 0% 0% / 0.30), transparent 70%)",
+          transition: "transform 200ms ease, opacity 200ms ease",
+          transform: `translateX(-50%) scale(${airborne ? 0.5 : 1})`,
+          opacity: airborne ? 0.15 : 0.55,
+        }}
+      />
       {(menuOpen || bubble) && (
         <div className="pointer-events-auto absolute bottom-full left-1/2 mb-2 -translate-x-1/2 flex flex-col items-center gap-2">
           {menuOpen ? (
@@ -442,7 +514,10 @@ export function PetCompanion() {
         <PetSprite
           mood={mood}
           facing={facing}
-          walking={walking}
+          action={action}
+          idle={moveAction === null && mood !== "sleepy"}
+          animate={!reducedMotion}
+          effect={effect}
           pixelSize={PIXEL_SIZE}
         />
       </button>

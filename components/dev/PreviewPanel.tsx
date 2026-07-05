@@ -4,6 +4,100 @@ import { useEffect, useState } from "react";
 import { ArrowUp, ArrowDown, Zap, Frown, Trophy, Timer, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { emitTrainingFinished } from "@/lib/pet/events";
+import {
+  PetSprite,
+  type PetAction,
+  type PetEffect,
+} from "@/components/pet/PetSprite";
+import type { MoodId } from "@/lib/pet/types";
+
+const LAB_ACTIONS: PetAction[] = [
+  "stand",
+  "walk",
+  "run",
+  "fly",
+  "glide",
+  "peck",
+  "flap",
+  "sleep",
+];
+const LAB_MOODS: MoodId[] = [
+  "chilling",
+  "nudging",
+  "urgent",
+  "worried",
+  "focused",
+  "celebrating",
+  "disappointed",
+  "proud",
+  "sleepy",
+  "comeback",
+];
+
+// Dev-only stage to QA every sprite action x mood combo in isolation.
+function PetLab() {
+  const [action, setAction] = useState<PetAction>("stand");
+  const [mood, setMood] = useState<MoodId>("chilling");
+  const [effect, setEffect] = useState<PetEffect>(null);
+
+  const fire = (kind: "dust" | "feather") =>
+    setEffect((e) => ({ kind, key: (e?.key ?? 0) + 1 }));
+
+  return (
+    <div className="flex flex-col gap-1.5 border-t border-border pt-2">
+      <p className="label-eyebrow">pet lab</p>
+      <div className="flex items-end justify-between gap-2">
+        <div className="flex flex-col gap-1">
+          <select
+            value={action}
+            onChange={(e) => setAction(e.target.value as PetAction)}
+            className="rounded border border-border bg-background px-1 py-0.5 text-xs"
+          >
+            {LAB_ACTIONS.map((a) => (
+              <option key={a} value={a}>
+                {a}
+              </option>
+            ))}
+          </select>
+          <select
+            value={mood}
+            onChange={(e) => setMood(e.target.value as MoodId)}
+            className="rounded border border-border bg-background px-1 py-0.5 text-xs"
+          >
+            {LAB_MOODS.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+          <div className="flex gap-1">
+            <button
+              type="button"
+              onClick={() => fire("dust")}
+              className="rounded border border-border px-1 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+            >
+              dust
+            </button>
+            <button
+              type="button"
+              onClick={() => fire("feather")}
+              className="rounded border border-border px-1 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+            >
+              feather
+            </button>
+          </div>
+        </div>
+        <PetSprite
+          mood={mood}
+          action={action}
+          idle={action === "stand"}
+          effect={effect}
+          pixelSize={4}
+        />
+      </div>
+    </div>
+  );
+}
 
 export function PreviewPanel() {
   const [show, setShow] = useState(false);
@@ -145,6 +239,7 @@ export function PreviewPanel() {
           daily bite finished
         </Button>
       </div>
+      <PetLab />
     </div>
   );
 }

@@ -110,7 +110,7 @@ export function CardFrame({
           </p>
           <HeatmapStrip heatmap={data.heatmap} today={data.todayKey} />
         </div>
-        <PetSprite mood={petMood} pixelSize={isWide ? 6 : 8} />
+        <PetSprite mood={petMood} pixelSize={isWide ? 4 : 5} animate={false} />
       </footer>
     </div>
   );
