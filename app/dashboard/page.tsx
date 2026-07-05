@@ -6,7 +6,6 @@ import { CalendarHeatmap } from "@/components/CalendarHeatmap";
 import { SmartCTA } from "@/components/SmartCTA";
 import { ShareButton } from "@/components/share/ShareButton";
 import { getUserStats } from "@/lib/themecp/user-stats";
-import { dayKeyInTz } from "@/lib/time/day-key";
 
 export const dynamic = "force-dynamic";
 
@@ -16,10 +15,10 @@ export default async function DashboardPage() {
 
   const {
     profile,
-    timezone,
     todayKey,
-    trainings,
     streak,
+    practiceDayCounts,
+    todayRoundDone,
     totalRounds,
     totalAk,
     akRate,
@@ -33,12 +32,10 @@ export default async function DashboardPage() {
   start.setDate(start.getDate() - 182);
   const end = new Date(today);
   end.setDate(end.getDate() + 182);
-  const counts = new Map<string, number>();
-  for (const t of trainings) {
-    const k = dayKeyInTz(new Date(t.finished_at), timezone);
-    counts.set(k, (counts.get(k) ?? 0) + 1);
-  }
-  const values = Array.from(counts.entries()).map(([date, count]) => ({ date, count }));
+  const values = Array.from(practiceDayCounts.entries()).map(([date, count]) => ({
+    date,
+    count,
+  }));
 
   return (
     <div className="space-y-12">
@@ -64,7 +61,7 @@ export default async function DashboardPage() {
             handle={profile.cf_handle}
             level={profile.level}
             gateCandidates={gateCandidates}
-            todayDone={streak.todayDone}
+            todayDone={todayRoundDone}
             weakestTag={weakestTag}
           />
           <ShareButton
@@ -105,6 +102,7 @@ export default async function DashboardPage() {
         <div className="flex items-baseline justify-between">
           <h2 className="text-base font-semibold tracking-tight">Activity</h2>
           <p className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span className="hidden sm:inline">darker means more problems ·</span>
             <span>less</span>
             <span className="flex gap-0.5">
               <span className="h-2.5 w-2.5 rounded-sm bg-[hsl(0_0%_95%)]" />

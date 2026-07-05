@@ -12,8 +12,8 @@ export function StreakCard({
   const status = todayDone
     ? "today complete"
     : current > 0
-      ? "do today before midnight"
-      : "start one today";
+      ? "keep it alive before midnight — even one problem"
+      : "any practice counts — bite, upsolve, or round";
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">

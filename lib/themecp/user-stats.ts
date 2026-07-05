@@ -1,14 +1,28 @@
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { getAuthedUser, getProfile } from "@/lib/supabase/auth";
-import { computeStreak, type StreakResult } from "@/lib/themecp/streak";
-import { dayKeyInTz, shiftDayKey, todayKey as computeTodayKey } from "@/lib/time/day-key";
+import { computeStreakFromDays, type StreakResult } from "@/lib/themecp/streak";
+import { buildPracticeDayCounts } from "@/lib/themecp/practice-days";
+import {
+  dayKeyInTz,
+  diffDayKeys,
+  shiftDayKey,
+  todayKey as computeTodayKey,
+} from "@/lib/time/day-key";
 
 export type GateCandidate = {
   contest_id: number;
   problem_index: string;
   problem_name: string;
   rating: number;
+};
+
+export type OpenUpsolveItem = {
+  contest_id: number;
+  problem_index: string;
+  problem_name: string;
+  rating: number | null;
+  tags: string[];
 };
 
 export type TrainingRow = {
@@ -31,7 +45,17 @@ export type UserStats = {
   timezone: string;
   todayKey: string;
   trainings: TrainingRow[];
+  // Practice streak: any real problem counts (bite, upsolve, or round).
   streak: StreakResult;
+  // Problems practiced per day key (round = 4, bite/upsolve = 1 each).
+  practiceDayCounts: Map<string, number>;
+  todayBiteDone: boolean;
+  todayRoundDone: boolean;
+  // Unsolved upsolve queue, easiest first — the daily bite's first source.
+  openUpsolve: OpenUpsolveItem[];
+  // Most recent practice of any kind; lastFinishedAt below stays rounds-only.
+  lastPracticeAt: string | null;
+  daysIdle: number;
   totalRounds: number;
   totalAk: number;
   akRate: number;
@@ -77,8 +101,8 @@ export const getUserStats = cache(async (): Promise<UserStats | null> => {
 
   const supabase = await createClient();
 
-  // Parallelize the two table reads — they don't depend on each other.
-  const [trainingsRes, lastTrainingsRes] = await Promise.all([
+  // Parallelize the table reads — they don't depend on each other.
+  const [trainingsRes, lastTrainingsRes, dailySolvesRes, upsolveRes] = await Promise.all([
     supabase
       .from("trainings")
       .select(
@@ -95,19 +119,64 @@ export const getUserStats = cache(async (): Promise<UserStats | null> => {
       .eq("user_id", user.id)
       .order("finished_at", { ascending: false })
       .limit(1),
+    supabase
+      .from("daily_solves")
+      .select("day_key, contest_id, problem_index, solved_at")
+      .eq("user_id", user.id)
+      .order("day_key", { ascending: false })
+      .limit(365),
+    supabase
+      .from("upsolve_problems")
+      .select("contest_id, problem_index, problem_name, rating, tags, solved_at")
+      .eq("user_id", user.id),
   ]);
 
   const trainingRows: TrainingRow[] = trainingsRes.data ?? [];
   const timezone = profile.timezone ?? "UTC";
   const tKey = computeTodayKey(timezone);
-  const finishedAtList = trainingRows.map((t) => t.finished_at);
-  const streak = computeStreak(finishedAtList, timezone);
 
-  const heatCounts = new Map<string, number>();
-  for (const t of trainingRows) {
-    const k = dayKeyInTz(new Date(t.finished_at), timezone);
-    heatCounts.set(k, (heatCounts.get(k) ?? 0) + 1);
+  const dailySolves = dailySolvesRes.data ?? [];
+  const upsolveRows = upsolveRes.data ?? [];
+  const upsolveSolves = upsolveRows
+    .filter((u) => u.solved_at !== null)
+    .map((u) => ({
+      contest_id: u.contest_id,
+      problem_index: u.problem_index,
+      solved_at: u.solved_at as string,
+    }));
+  const openUpsolve: OpenUpsolveItem[] = upsolveRows
+    .filter((u) => u.solved_at === null)
+    .map((u) => ({
+      contest_id: u.contest_id,
+      problem_index: u.problem_index,
+      problem_name: u.problem_name,
+      rating: u.rating,
+      tags: u.tags ?? [],
+    }))
+    .sort((a, b) => (a.rating ?? 0) - (b.rating ?? 0));
+
+  const practiceDayCounts = buildPracticeDayCounts(
+    { trainings: trainingRows, dailySolves, upsolveSolves },
+    timezone,
+  );
+  const streak = computeStreakFromDays(new Set(practiceDayCounts.keys()), tKey);
+
+  const todayBiteDone = dailySolves.some((d) => d.day_key === tKey);
+  const todayRoundDone = trainingRows.some(
+    (t) => dayKeyInTz(new Date(t.finished_at), timezone) === tKey,
+  );
+
+  // Latest practice of any kind (ISO strings from PostgREST compare safely).
+  let lastPracticeAt: string | null = trainingRows[0]?.finished_at ?? null;
+  for (const d of dailySolves) {
+    if (!lastPracticeAt || d.solved_at > lastPracticeAt) lastPracticeAt = d.solved_at;
   }
+  for (const u of upsolveSolves) {
+    if (!lastPracticeAt || u.solved_at > lastPracticeAt) lastPracticeAt = u.solved_at;
+  }
+  const daysIdle = lastPracticeAt
+    ? Math.max(0, diffDayKeys(tKey, dayKeyInTz(new Date(lastPracticeAt), timezone)))
+    : 0;
 
   const totalAk = trainingRows.filter((t) => t.is_ak).length;
   const totalRounds = trainingRows.length;
@@ -148,6 +217,12 @@ export const getUserStats = cache(async (): Promise<UserStats | null> => {
     todayKey: tKey,
     trainings: trainingRows,
     streak,
+    practiceDayCounts,
+    todayBiteDone,
+    todayRoundDone,
+    openUpsolve,
+    lastPracticeAt,
+    daysIdle,
     totalRounds,
     totalAk,
     akRate,
@@ -156,7 +231,7 @@ export const getUserStats = cache(async (): Promise<UserStats | null> => {
     lastFinishedAt,
     gateCandidates,
     gateBlocked: gateCandidates.length > 0,
-    recentHeatmap: buildRecentHeatmap(heatCounts, 30, tKey),
+    recentHeatmap: buildRecentHeatmap(practiceDayCounts, 30, tKey),
     weakestTag: computeWeakestTag(trainingRows),
   };
 });

@@ -2,8 +2,9 @@ import { redirect } from "next/navigation";
 import { CalendarHeatmap } from "@/components/CalendarHeatmap";
 import { createClient } from "@/lib/supabase/server";
 import { getAuthedUser, getProfile } from "@/lib/supabase/auth";
-import { computeStreak } from "@/lib/themecp/streak";
-import { dayKeyInTz, todayKey as computeTodayKey } from "@/lib/time/day-key";
+import { computeStreakFromDays } from "@/lib/themecp/streak";
+import { buildPracticeDayCounts } from "@/lib/themecp/practice-days";
+import { todayKey as computeTodayKey } from "@/lib/time/day-key";
 import { StreakCard } from "@/components/StreakCard";
 
 export const dynamic = "force-dynamic";
@@ -17,21 +18,44 @@ export default async function HeatmapPage() {
   const todayKey = computeTodayKey(timezone);
 
   const supabase = await createClient();
-  // The visible heatmap window is ±182 days = 365 days. Pulling 2000 rows was
-  // gratuitous; cap at 730 (2 years) so streak history past the visible window
-  // is still respected without bloating the response.
-  const { data: trainings } = await supabase
-    .from("trainings")
-    .select("finished_at, is_ak")
-    .eq("user_id", user.id)
-    .order("finished_at", { ascending: false })
-    .limit(730);
+  // The visible heatmap window is ±182 days = 365 days. Cap history reads at
+  // 730 (2 years) so streak history past the visible window is still
+  // respected without bloating the response.
+  const [{ data: trainings }, { data: dailySolves }, { data: upsolveSolves }] =
+    await Promise.all([
+      supabase
+        .from("trainings")
+        .select("finished_at, is_ak")
+        .eq("user_id", user.id)
+        .order("finished_at", { ascending: false })
+        .limit(730),
+      supabase
+        .from("daily_solves")
+        .select("day_key, contest_id, problem_index")
+        .eq("user_id", user.id)
+        .order("day_key", { ascending: false })
+        .limit(730),
+      supabase
+        .from("upsolve_problems")
+        .select("contest_id, problem_index, solved_at")
+        .eq("user_id", user.id)
+        .not("solved_at", "is", null)
+        .order("solved_at", { ascending: false })
+        .limit(730),
+    ]);
 
-  const counts = new Map<string, number>();
-  for (const t of trainings ?? []) {
-    const k = dayKeyInTz(new Date(t.finished_at), timezone);
-    counts.set(k, (counts.get(k) ?? 0) + 1);
-  }
+  const counts = buildPracticeDayCounts(
+    {
+      trainings: trainings ?? [],
+      dailySolves: dailySolves ?? [],
+      upsolveSolves: (upsolveSolves ?? []).map((u) => ({
+        contest_id: u.contest_id,
+        problem_index: u.problem_index,
+        solved_at: u.solved_at as string,
+      })),
+    },
+    timezone,
+  );
   const values = Array.from(counts.entries()).map(([date, count]) => ({ date, count }));
 
   const today = new Date();
@@ -40,18 +64,16 @@ export default async function HeatmapPage() {
   const end365 = new Date(today);
   end365.setDate(end365.getDate() + 182);
 
-  const streak = computeStreak(
-    (trainings ?? []).map((t) => t.finished_at),
-    timezone,
-  );
+  const streak = computeStreakFromDays(new Set(counts.keys()), todayKey);
 
   return (
     <div className="space-y-12">
       <header className="space-y-2">
         <p className="label-eyebrow">Heatmap</p>
-        <h1 className="text-3xl font-semibold tracking-tight">A year of rounds</h1>
+        <h1 className="text-3xl font-semibold tracking-tight">A year of practice</h1>
         <p className="text-sm text-muted-foreground">
-          Each cell is one day. Darker means more rounds finished that day.
+          Each cell is one day. Darker means more problems that day — a bite or upsolve
+          counts 1, a full round counts 4.
         </p>
       </header>
 
@@ -71,7 +93,7 @@ export default async function HeatmapPage() {
             </span>
             <span className="text-xs text-muted-foreground">days</span>
           </div>
-          <p className="text-xs text-muted-foreground">days with at least one round</p>
+          <p className="text-xs text-muted-foreground">days with at least one problem</p>
         </div>
         <div className="space-y-4 p-6">
           <p className="label-eyebrow">Total rounds</p>

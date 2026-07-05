@@ -51,11 +51,11 @@ export function CalendarHeatmap({
           titleForValue={(v) => {
             if (!v || v.count === 0) {
               return (v as DayValue | undefined)?.date === today
-                ? "today — no rounds yet"
-                : "no training";
+                ? "today — no practice yet"
+                : "no practice";
             }
             const suffix = (v as DayValue).date === today ? " · today" : "";
-            return `${(v as DayValue).date}: ${v.count} round${v.count === 1 ? "" : "s"}${suffix}`;
+            return `${(v as DayValue).date}: ${v.count} problem${v.count === 1 ? "" : "s"}${suffix}`;
           }}
         />
       </div>
