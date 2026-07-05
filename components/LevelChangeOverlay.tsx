@@ -186,7 +186,7 @@ function LevelUpContent({
           {event.levelAfter}
         </span>
       </div>
-      <PetSprite mood="celebrating" pixelSize={4} />
+      <PetSprite mood="celebrating" pixelSize={6} />
       <p className="text-sm text-muted-foreground">
         {tieredUp ? (
           <>
@@ -235,7 +235,7 @@ function LevelDownContent({
           {event.levelAfter}
         </span>
       </div>
-      <PetSprite mood="disappointed" pixelSize={4} />
+      <PetSprite mood="disappointed" pixelSize={6} />
       <p className="max-w-xs text-sm text-muted-foreground">
         into the upsolve pile it goes. one round at a time. we adapt.
       </p>

@@ -26,8 +26,8 @@ import { PetMenu } from "@/components/pet/PetMenu";
 const MUTED_KEY = "sheista:pet-muted";
 const HIDDEN_KEY = "sheista:pet-hidden-session";
 const CELEBRATE_MS = 8_000;
-const PIXEL_SIZE = 3;
-const PET_SIZE = PET_GRID * PIXEL_SIZE; // 72px sprite
+const PIXEL_SIZE = 4;
+const PET_SIZE = PET_GRID * PIXEL_SIZE; // 64px sprite
 const GROUND_OFFSET = 2; // px from bottom of viewport — feet on the edge
 const WALK_SPEED = 80; // px/sec horizontal
 const RUN_SPEED = 200; // px/sec when the target is far
