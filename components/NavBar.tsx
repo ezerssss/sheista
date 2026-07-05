@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getAuthedUser, getProfile } from "@/lib/supabase/auth";
 import { LogOutButton } from "@/components/LogOutButton";
+import { TimezoneSync } from "@/components/TimezoneSync";
 
 const NAV = [
   { href: "/dashboard", label: "dashboard" },
@@ -19,6 +20,7 @@ export async function NavBar() {
 
   return (
     <header className="sticky top-0 z-30 border-b border-border/70 bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/65">
+      {user && profile && <TimezoneSync profileTimezone={profile.timezone ?? "UTC"} />}
       <div className="container mx-auto flex flex-wrap items-center gap-x-8 gap-y-3 px-6 py-4">
         <Link
           href={user ? "/dashboard" : "/"}

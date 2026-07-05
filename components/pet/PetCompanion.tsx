@@ -158,6 +158,7 @@ export function PetCompanion() {
         lastFinishedAt: state.lastFinishedAt,
         gateBlocked: state.gateBlocked,
         recentHeatmap: state.recentHeatmap,
+        todayKey: state.todayKey,
       },
       activeTraining: active,
       recentlyFinished,

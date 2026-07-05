@@ -9,6 +9,7 @@ type ProfileRow = {
   cf_rating: number | null;
   cf_avatar: string | null;
   level: number;
+  timezone: string;
   updated_at: string;
 };
 type TrainingRow = {
@@ -34,6 +35,19 @@ type TrainingProblemRow = {
   tags: string[];
   solved_at: string | null;
 };
+type DailySolveRow = {
+  user_id: string;
+  day_key: string;
+  contest_id: number;
+  problem_index: string;
+  problem_name: string;
+  rating: number | null;
+  tags: string[];
+  source: "upsolve" | "weak-tag" | "random";
+  started_at: string;
+  solved_at: string;
+  created_at: string;
+};
 type UpsolveRow = {
   user_id: string;
   contest_id: number;
@@ -57,6 +71,7 @@ export type Database = {
           cf_rating?: number | null;
           cf_avatar?: string | null;
           level?: number;
+          timezone?: string;
           updated_at?: string;
         };
         Update: {
@@ -65,6 +80,7 @@ export type Database = {
           cf_rating?: number | null;
           cf_avatar?: string | null;
           level?: number;
+          timezone?: string;
           updated_at?: string;
         };
         Relationships: [];
@@ -100,6 +116,24 @@ export type Database = {
           solved_at?: string | null;
         };
         Update: Partial<TrainingProblemRow>;
+        Relationships: [];
+      };
+      daily_solves: {
+        Row: DailySolveRow;
+        Insert: {
+          user_id: string;
+          day_key: string;
+          contest_id: number;
+          problem_index: string;
+          problem_name?: string;
+          rating?: number | null;
+          tags?: string[];
+          source?: "upsolve" | "weak-tag" | "random";
+          started_at: string;
+          solved_at: string;
+          created_at?: string;
+        };
+        Update: Partial<DailySolveRow>;
         Relationships: [];
       };
       upsolve_problems: {

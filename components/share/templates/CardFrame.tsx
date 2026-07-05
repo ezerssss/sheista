@@ -1,17 +1,11 @@
 "use client";
 
 import { PetSprite } from "@/components/pet/PetSprite";
+import { shiftDayKey } from "@/lib/time/day-key";
 import type { MoodId } from "@/lib/pet/types";
 import type { ShareCardData, ShareFormat } from "@/components/share/types";
 
 const HEATMAP_DAYS = 30;
-
-function todayKey(d = new Date()): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
 
 function colorForCount(c: number): string {
   if (c <= 0) return "#1a1a1a";
@@ -21,14 +15,17 @@ function colorForCount(c: number): string {
   return "#39d353";
 }
 
-function HeatmapStrip({ heatmap }: { heatmap: ShareCardData["heatmap"] }) {
+function HeatmapStrip({
+  heatmap,
+  today,
+}: {
+  heatmap: ShareCardData["heatmap"];
+  today: string;
+}) {
   const map = new Map(heatmap.map((d) => [d.date, d.count]));
   const cells: { key: string; count: number }[] = [];
-  const today = new Date();
   for (let i = HEATMAP_DAYS - 1; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(d.getDate() - i);
-    const key = todayKey(d);
+    const key = shiftDayKey(today, -i);
     cells.push({ key, count: map.get(key) ?? 0 });
   }
   return (
@@ -111,7 +108,7 @@ export function CardFrame({
           >
             last 30 days
           </p>
-          <HeatmapStrip heatmap={data.heatmap} />
+          <HeatmapStrip heatmap={data.heatmap} today={data.todayKey} />
         </div>
         <PetSprite mood={petMood} pixelSize={isWide ? 6 : 8} />
       </footer>

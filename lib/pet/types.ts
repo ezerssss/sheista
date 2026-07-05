@@ -9,6 +9,8 @@ export type AuthedPetState = {
   lastFinishedAt: string | null;
   gateBlocked: boolean;
   recentHeatmap: { date: string; count: number }[];
+  /** YYYY-MM-DD in the user's timezone (server-computed). */
+  todayKey: string;
 };
 
 export type PetStatePayload =

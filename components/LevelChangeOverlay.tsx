@@ -65,6 +65,7 @@ export function LevelChangeOverlay() {
     akRate: state.akRate,
     totalRounds: state.totalRounds,
     heatmap: state.recentHeatmap,
+    todayKey: state.todayKey,
   };
 
   return (

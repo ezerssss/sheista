@@ -86,3 +86,25 @@ export async function fetchSolvedProblems(handle: string): Promise<CodeforcesPro
   }
   return out;
 }
+
+/**
+ * Earliest OK submission time (ms since epoch) per solved problem, keyed
+ * `contestId_index`. Lets callers date a solve by when it actually happened
+ * on Codeforces instead of when sheista noticed it — an 11pm upsolve synced
+ * the next morning must land on the right heatmap day.
+ */
+export async function fetchSolvedProblemsWithTimes(handle: string): Promise<Map<string, number>> {
+  const subs = await call<CodeforcesSubmission[]>(
+    `${BASE}/user.status?handle=${encodeURIComponent(handle)}`,
+    { revalidate: 60 },
+  );
+  const times = new Map<string, number>();
+  for (const s of subs) {
+    if (s.verdict !== "OK") continue;
+    const key = `${s.problem.contestId}_${s.problem.index}`;
+    const t = s.creationTimeSeconds * 1000;
+    const prev = times.get(key);
+    if (prev === undefined || t < prev) times.set(key, t);
+  }
+  return times;
+}

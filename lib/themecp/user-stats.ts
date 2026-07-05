@@ -2,6 +2,7 @@ import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { getAuthedUser, getProfile } from "@/lib/supabase/auth";
 import { computeStreak, type StreakResult } from "@/lib/themecp/streak";
+import { dayKeyInTz, shiftDayKey, todayKey as computeTodayKey } from "@/lib/time/day-key";
 
 export type GateCandidate = {
   contest_id: number;
@@ -27,6 +28,8 @@ export type UserStats = {
     cf_rating: number | null;
     level: number;
   };
+  timezone: string;
+  todayKey: string;
   trainings: TrainingRow[];
   streak: StreakResult;
   totalRounds: number;
@@ -44,28 +47,14 @@ export type UserStats = {
   weakestTag: string | null;
 };
 
-function dayKey(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
 function buildRecentHeatmap(
-  trainings: TrainingRow[],
+  counts: Map<string, number>,
   days: number,
+  today: string,
 ): { date: string; count: number }[] {
-  const counts = new Map<string, number>();
-  for (const t of trainings) {
-    const k = dayKey(new Date(t.finished_at));
-    counts.set(k, (counts.get(k) ?? 0) + 1);
-  }
-  const today = new Date();
   const out: { date: string; count: number }[] = [];
   for (let i = days - 1; i >= 0; i--) {
-    const d = new Date(today);
-    d.setDate(d.getDate() - i);
-    const k = dayKey(d);
+    const k = shiftDayKey(today, -i);
     out.push({ date: k, count: counts.get(k) ?? 0 });
   }
   return out;
@@ -109,8 +98,16 @@ export const getUserStats = cache(async (): Promise<UserStats | null> => {
   ]);
 
   const trainingRows: TrainingRow[] = trainingsRes.data ?? [];
+  const timezone = profile.timezone ?? "UTC";
+  const tKey = computeTodayKey(timezone);
   const finishedAtList = trainingRows.map((t) => t.finished_at);
-  const streak = computeStreak(finishedAtList);
+  const streak = computeStreak(finishedAtList, timezone);
+
+  const heatCounts = new Map<string, number>();
+  for (const t of trainingRows) {
+    const k = dayKeyInTz(new Date(t.finished_at), timezone);
+    heatCounts.set(k, (heatCounts.get(k) ?? 0) + 1);
+  }
 
   const totalAk = trainingRows.filter((t) => t.is_ak).length;
   const totalRounds = trainingRows.length;
@@ -147,6 +144,8 @@ export const getUserStats = cache(async (): Promise<UserStats | null> => {
       cf_rating: profile.cf_rating,
       level: profile.level,
     },
+    timezone,
+    todayKey: tKey,
     trainings: trainingRows,
     streak,
     totalRounds,
@@ -157,7 +156,7 @@ export const getUserStats = cache(async (): Promise<UserStats | null> => {
     lastFinishedAt,
     gateCandidates,
     gateBlocked: gateCandidates.length > 0,
-    recentHeatmap: buildRecentHeatmap(trainingRows, 30),
+    recentHeatmap: buildRecentHeatmap(heatCounts, 30, tKey),
     weakestTag: computeWeakestTag(trainingRows),
   };
 });

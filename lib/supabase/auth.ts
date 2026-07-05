@@ -20,7 +20,7 @@ export const getProfile = cache(async () => {
   const supabase = await createClient();
   const { data } = await supabase
     .from("profiles")
-    .select("id, cf_handle, cf_rating, cf_avatar, level, updated_at")
+    .select("id, cf_handle, cf_rating, cf_avatar, level, timezone, updated_at")
     .eq("id", user.id)
     .single();
   return data;

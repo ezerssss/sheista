@@ -12,12 +12,18 @@ export function CalendarHeatmap({
   values,
   startDate,
   endDate,
+  todayKey,
 }: {
   values: DayValue[];
   startDate: Date;
   endDate: Date;
+  /**
+   * Server-computed YYYY-MM-DD in the user's timezone. Without it we fall
+   * back to the browser clock, which can disagree with the server buckets.
+   */
+  todayKey?: string;
 }) {
-  const today = fmt(new Date());
+  const today = todayKey ?? fmt(new Date());
 
   const valuesWithToday = values.some((v) => v.date === today)
     ? values

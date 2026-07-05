@@ -24,6 +24,7 @@ Do **not** use the `service_role` key — keep it secret; sheista doesn't need i
 1. Sidebar → **SQL Editor** → **New query**.
 2. Open `supabase/migrations/0001_init.sql` from this repo, paste the entire contents, click **Run**.
 3. You should see "Success. No rows returned." That created `profiles`, `trainings`, `training_problems`, `upsolve_problems`, RLS policies, and a trigger that creates a profile row whenever a new auth user signs up.
+4. Repeat for each later migration in order: `0002_round_id.sql`, `0003_cleanup_dupes.sql`, `0004_daily_bites.sql` (adds `profiles.timezone` + the `daily_solves` table for daily bites — required, the app selects `profiles.timezone` everywhere).
 
 ## 4. Tweak auth (optional but recommended for dev)
 

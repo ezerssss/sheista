@@ -17,5 +17,7 @@ export type ShareCardData = {
   akRate: number;
   totalRounds: number;
   heatmap: { date: string; count: number }[];
+  /** YYYY-MM-DD in the user's timezone (server-computed). */
+  todayKey: string;
   levelBefore?: number;
 };

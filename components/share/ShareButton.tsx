@@ -17,6 +17,7 @@ export function ShareButton({
   akRate,
   totalRounds,
   heatmap,
+  todayKey,
 }: {
   cfHandle: string;
   cfRating: number | null;
@@ -27,6 +28,7 @@ export function ShareButton({
   akRate: number;
   totalRounds: number;
   heatmap: { date: string; count: number }[];
+  todayKey: string;
 }) {
   const [open, setOpen] = useState(false);
   const [template, setTemplate] = useState<ShareTemplate>("daily");
@@ -56,6 +58,7 @@ export function ShareButton({
     akRate,
     totalRounds,
     heatmap,
+    todayKey,
   };
 
   return (

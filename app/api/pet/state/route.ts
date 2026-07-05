@@ -25,5 +25,6 @@ export async function GET(): Promise<NextResponse<PetStatePayload>> {
     lastFinishedAt: stats.lastFinishedAt,
     gateBlocked: stats.gateBlocked,
     recentHeatmap: stats.recentHeatmap,
+    todayKey: stats.todayKey,
   });
 }

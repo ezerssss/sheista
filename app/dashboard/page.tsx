@@ -6,15 +6,9 @@ import { CalendarHeatmap } from "@/components/CalendarHeatmap";
 import { SmartCTA } from "@/components/SmartCTA";
 import { ShareButton } from "@/components/share/ShareButton";
 import { getUserStats } from "@/lib/themecp/user-stats";
+import { dayKeyInTz } from "@/lib/time/day-key";
 
 export const dynamic = "force-dynamic";
-
-function formatDay(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
 
 export default async function DashboardPage() {
   const stats = await getUserStats();
@@ -22,6 +16,8 @@ export default async function DashboardPage() {
 
   const {
     profile,
+    timezone,
+    todayKey,
     trainings,
     streak,
     totalRounds,
@@ -39,7 +35,7 @@ export default async function DashboardPage() {
   end.setDate(end.getDate() + 182);
   const counts = new Map<string, number>();
   for (const t of trainings) {
-    const k = formatDay(new Date(t.finished_at));
+    const k = dayKeyInTz(new Date(t.finished_at), timezone);
     counts.set(k, (counts.get(k) ?? 0) + 1);
   }
   const values = Array.from(counts.entries()).map(([date, count]) => ({ date, count }));
@@ -81,6 +77,7 @@ export default async function DashboardPage() {
             akRate={akRate}
             totalRounds={totalRounds}
             heatmap={values}
+            todayKey={todayKey}
           />
         </div>
       </header>
@@ -120,7 +117,7 @@ export default async function DashboardPage() {
           </p>
         </div>
         <div className="rounded-lg border border-border p-6">
-          <CalendarHeatmap values={values} startDate={start} endDate={end} />
+          <CalendarHeatmap values={values} startDate={start} endDate={end} todayKey={todayKey} />
         </div>
       </section>
     </div>

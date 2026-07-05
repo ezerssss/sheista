@@ -1,18 +1,20 @@
 import { redirect } from "next/navigation";
 import { CalendarHeatmap } from "@/components/CalendarHeatmap";
 import { createClient } from "@/lib/supabase/server";
-import { getAuthedUser } from "@/lib/supabase/auth";
+import { getAuthedUser, getProfile } from "@/lib/supabase/auth";
 import { computeStreak } from "@/lib/themecp/streak";
+import { dayKeyInTz, todayKey as computeTodayKey } from "@/lib/time/day-key";
 import { StreakCard } from "@/components/StreakCard";
 
 export const dynamic = "force-dynamic";
 
-const fmt = (d: Date) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-
 export default async function HeatmapPage() {
   const user = await getAuthedUser();
   if (!user) redirect("/auth/login?next=/heatmap");
+
+  const profile = await getProfile();
+  const timezone = profile?.timezone ?? "UTC";
+  const todayKey = computeTodayKey(timezone);
 
   const supabase = await createClient();
   // The visible heatmap window is ±182 days = 365 days. Pulling 2000 rows was
@@ -27,7 +29,7 @@ export default async function HeatmapPage() {
 
   const counts = new Map<string, number>();
   for (const t of trainings ?? []) {
-    const k = fmt(new Date(t.finished_at));
+    const k = dayKeyInTz(new Date(t.finished_at), timezone);
     counts.set(k, (counts.get(k) ?? 0) + 1);
   }
   const values = Array.from(counts.entries()).map(([date, count]) => ({ date, count }));
@@ -38,7 +40,10 @@ export default async function HeatmapPage() {
   const end365 = new Date(today);
   end365.setDate(end365.getDate() + 182);
 
-  const streak = computeStreak((trainings ?? []).map((t) => t.finished_at));
+  const streak = computeStreak(
+    (trainings ?? []).map((t) => t.finished_at),
+    timezone,
+  );
 
   return (
     <div className="space-y-12">
@@ -96,7 +101,12 @@ export default async function HeatmapPage() {
           </p>
         </div>
         <div className="rounded-lg border border-border p-6">
-          <CalendarHeatmap values={values} startDate={start365} endDate={end365} />
+          <CalendarHeatmap
+            values={values}
+            startDate={start365}
+            endDate={end365}
+            todayKey={todayKey}
+          />
         </div>
       </section>
     </div>
