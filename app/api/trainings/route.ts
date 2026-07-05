@@ -1,8 +1,9 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { clampLevel } from "@/lib/themecp/levels";
 import { fetchSolvedProblems } from "@/lib/codeforces/api";
+import { syncUpsolveFromCf } from "@/lib/themecp/upsolve-sync";
 
 const ProblemSchema = z.object({
   slot: z.number().int().min(1).max(4),
@@ -68,12 +69,16 @@ export async function POST(request: Request) {
   // Upsolve gate: refuse to record a new round if the previous round's easiest
   // unsolved problem is still unsolved on Codeforces. Mirrors the client gate.
   type PrevProblem = { contest_id: number; problem_index: string; rating: number; solved_at: string | null };
-  const { data: prevTrainings } = await supabase
-    .from("trainings")
-    .select("training_problems(contest_id, problem_index, rating, solved_at)")
-    .eq("user_id", user.id)
-    .order("finished_at", { ascending: false })
-    .limit(1);
+  const [{ data: prevTrainings }, { data: profile }] = await Promise.all([
+    supabase
+      .from("trainings")
+      .select("training_problems(contest_id, problem_index, rating, solved_at)")
+      .eq("user_id", user.id)
+      .order("finished_at", { ascending: false })
+      .limit(1),
+    supabase.from("profiles").select("cf_handle").eq("id", user.id).single(),
+  ]);
+  const handle = profile?.cf_handle ?? null;
 
   const prev = prevTrainings?.[0] as { training_problems?: PrevProblem[] } | undefined;
   const prevUnsolved: PrevProblem[] = (prev?.training_problems ?? []).filter((p) => !p.solved_at);
@@ -82,13 +87,18 @@ export async function POST(request: Request) {
       (min, p) => (p.rating < min.rating ? p : min),
       prevUnsolved[0],
     );
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("cf_handle")
-      .eq("id", user.id)
-      .single();
-    if (profile?.cf_handle) {
-      const cfSolved = await fetchSolvedProblems(profile.cf_handle);
+    // Fast path: the client gate flow (and /api/daily) sync upsolve_problems
+    // before a round can start, so the DB usually already knows the problem
+    // is solved — no 1-2s Codeforces round-trip on the finish hot path.
+    const { data: upsolveRow } = await supabase
+      .from("upsolve_problems")
+      .select("solved_at")
+      .eq("user_id", user.id)
+      .eq("contest_id", easiest.contest_id)
+      .eq("problem_index", easiest.problem_index)
+      .maybeSingle();
+    if (!upsolveRow?.solved_at && handle) {
+      const cfSolved = await fetchSolvedProblems(handle);
       const isUpsolved = cfSolved.some(
         (cf) => cf.contestId === easiest.contest_id && cf.index === easiest.problem_index,
       );
@@ -162,6 +172,13 @@ export async function POST(request: Request) {
       })),
       { onConflict: "user_id,contest_id,problem_index", ignoreDuplicates: true },
     );
+  }
+
+  // Reconcile the upsolve queue with CF off the hot path — the response
+  // returns immediately; solve times land in the background.
+  if (handle) {
+    const cfHandle = handle;
+    after(() => syncUpsolveFromCf(supabase, user.id, cfHandle).catch(() => {}));
   }
 
   return NextResponse.json({ ok: true, training_id: training.id, level: newLevel });
