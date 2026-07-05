@@ -7,6 +7,8 @@ export type TrainingFinishedDetail = {
   performance: number;
   levelBefore: number;
   levelAfter: number;
+  // "daily" = a one-problem daily bite; levels never change on those.
+  kind?: "round" | "daily";
 };
 
 export function emitTrainingFinished(detail: TrainingFinishedDetail): void {

@@ -3,17 +3,20 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Play, ArrowRight, AlertTriangle, RefreshCw } from "lucide-react";
+import { Play, ArrowRight, AlertTriangle, RefreshCw, Timer, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAllProblems, useSolvedProblems } from "@/hooks/useProblems";
 import { getLevel, ratingsOfLevel } from "@/lib/themecp/levels";
-import { selectRoundProblems } from "@/lib/themecp/select-problems";
+import { selectDailyProblem, selectRoundProblems } from "@/lib/themecp/select-problems";
 import { allTags } from "@/lib/themecp/tags";
 import {
+  type ActiveDaily,
   type ActiveTraining,
+  getActiveDaily,
   getActiveTraining,
   newRoundId,
+  setActiveDaily,
   setActiveTraining,
 } from "@/lib/themecp/active-training";
 import type { TrainingProblem } from "@/types/themecp";
@@ -25,17 +28,33 @@ export type GateCandidate = {
   rating: number;
 };
 
+export type OpenUpsolveItem = {
+  contest_id: number;
+  problem_index: string;
+  problem_name: string;
+  rating: number | null;
+  tags: string[];
+};
+
+const BITE_MINUTES = 15;
+
 export function SmartCTA({
   handle,
   level,
   gateCandidates,
-  todayDone,
+  todayRoundDone,
+  todayBiteDone,
+  daysIdle,
+  openUpsolve,
   weakestTag,
 }: {
   handle: string;
   level: number;
   gateCandidates: GateCandidate[];
-  todayDone: boolean;
+  todayRoundDone: boolean;
+  todayBiteDone: boolean;
+  daysIdle: number;
+  openUpsolve: OpenUpsolveItem[];
   weakestTag: string | null;
 }) {
   const router = useRouter();
@@ -43,6 +62,7 @@ export function SmartCTA({
   const { solved, refresh: refreshSolved } = useSolvedProblems(handle);
 
   const [active, setActive] = useState<ActiveTraining | null>(null);
+  const [activeDaily, setActiveDailyState] = useState<ActiveDaily | null>(null);
   const [hydrated, setHydrated] = useState(false);
   const [starting, setStarting] = useState(false);
   const [checking, setChecking] = useState(false);
@@ -64,6 +84,7 @@ export function SmartCTA({
 
   useEffect(() => {
     setActive(getActiveTraining());
+    setActiveDailyState(getActiveDaily());
     setHydrated(true);
   }, []);
 
@@ -80,6 +101,33 @@ export function SmartCTA({
     [gateCandidates, solvedKeys],
   );
   const gateBlocked = unsolvedGate.length > 0;
+
+  // Start a ~15-minute one-problem bite. `items` overrides the upsolve source
+  // (the gate flow passes the gate problems so the bite clears the gate).
+  const startBite = (items?: OpenUpsolveItem[]) => {
+    if (poolLoading || pool.length === 0) return;
+    const ratings = ratingsOfLevel(getLevel(level));
+    const pick = selectDailyProblem({
+      pool,
+      solvedKeys,
+      targetRating: ratings[1],
+      weakestTag,
+      openUpsolve: items ?? openUpsolve,
+    });
+    if (!pick) {
+      router.push("/training");
+      return;
+    }
+    const startTime = Date.now();
+    setActiveDaily({
+      id: newRoundId(),
+      problem: pick.problem,
+      source: pick.source,
+      startTime,
+      softEndTime: startTime + BITE_MINUTES * 60_000,
+    });
+    router.push("/daily");
+  };
 
   const quickStart = () => {
     if (poolLoading || pool.length === 0) return;
@@ -200,7 +248,9 @@ export function SmartCTA({
   if (!hydrated) {
     return (
       <Button asChild size="lg" data-pet-perch="primary">
-        <Link href="/training">{todayDone ? "Do another round" : "Start today's round"}</Link>
+        <Link href="/training">
+          {todayRoundDone ? "Do another round" : "Start today's round"}
+        </Link>
       </Button>
     );
   }
@@ -211,6 +261,17 @@ export function SmartCTA({
         <Link href="/round">
           <ArrowRight className="h-4 w-4" />
           Resume round
+        </Link>
+      </Button>
+    );
+  }
+
+  if (activeDaily) {
+    return (
+      <Button asChild size="lg" data-pet-perch="primary">
+        <Link href="/daily">
+          <ArrowRight className="h-4 w-4" />
+          Resume daily bite
         </Link>
       </Button>
     );
@@ -253,6 +314,54 @@ export function SmartCTA({
             {checking ? "Checking…" : "I solved them"}
           </Button>
         </div>
+        {!todayBiteDone && (
+          <div>
+            <Button
+              onClick={() =>
+                startBite(
+                  unsolvedGate.map((g) => ({
+                    contest_id: g.contest_id,
+                    problem_index: g.problem_index,
+                    problem_name: g.problem_name,
+                    rating: g.rating,
+                    tags: [],
+                  })),
+                )
+              }
+              disabled={poolLoading}
+              variant="outline"
+              size="sm"
+            >
+              <Timer className="h-3.5 w-3.5" />
+              clear one now — {BITE_MINUTES}-min bite
+            </Button>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Comeback: after a few idle days the ask shrinks to one problem —
+  // the full round is still one click away, just not the headline.
+  if (daysIdle >= 3 && !todayBiteDone) {
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        {poolLoading ? (
+          <Skeleton className="h-11 w-[220px] rounded-md" />
+        ) : (
+          <Button onClick={() => startBite()} size="lg" data-pet-perch="primary">
+            <Timer className="h-4 w-4" />
+            ease back in — one problem
+          </Button>
+        )}
+        <Button
+          onClick={quickStart}
+          disabled={poolLoading || starting}
+          variant="ghost"
+          size="lg"
+        >
+          full round
+        </Button>
       </div>
     );
   }
@@ -271,8 +380,21 @@ export function SmartCTA({
           data-pet-perch="primary"
         >
           <Play className="h-4 w-4" />
-          {todayDone ? "Do another round" : "Start today's round"}
+          {todayRoundDone ? "Do another round" : "Start today's round"}
         </Button>
+      )}
+      {todayBiteDone ? (
+        <span className="inline-flex items-center gap-1.5 px-2 text-xs text-accent">
+          <Check className="h-3.5 w-3.5" />
+          bite done
+        </span>
+      ) : (
+        !poolLoading && (
+          <Button onClick={() => startBite()} variant="outline" size="lg">
+            <Timer className="h-4 w-4" />
+            {BITE_MINUTES}-min bite
+          </Button>
+        )
       )}
       <Button asChild variant="ghost" size="lg">
         <Link href="/training">Customize</Link>

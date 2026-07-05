@@ -6,7 +6,12 @@ export type AuthedPetState = {
   totalRounds: number;
   akRate: number;
   avgRecentPerf: number;
+  /** Last full round. */
   lastFinishedAt: string | null;
+  /** Last practice of any kind (bite, upsolve, or round). */
+  lastPracticeAt: string | null;
+  daysIdle: number;
+  todayBiteDone: boolean;
   gateBlocked: boolean;
   recentHeatmap: { date: string; count: number }[];
   /** YYYY-MM-DD in the user's timezone (server-computed). */
@@ -26,4 +31,5 @@ export type MoodId =
   | "nudging"
   | "proud"
   | "chilling"
-  | "sleepy";
+  | "sleepy"
+  | "comeback";

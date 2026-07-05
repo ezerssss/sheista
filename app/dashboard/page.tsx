@@ -19,6 +19,9 @@ export default async function DashboardPage() {
     streak,
     practiceDayCounts,
     todayRoundDone,
+    todayBiteDone,
+    daysIdle,
+    openUpsolve,
     totalRounds,
     totalAk,
     akRate,
@@ -61,7 +64,10 @@ export default async function DashboardPage() {
             handle={profile.cf_handle}
             level={profile.level}
             gateCandidates={gateCandidates}
-            todayDone={todayRoundDone}
+            todayRoundDone={todayRoundDone}
+            todayBiteDone={todayBiteDone}
+            daysIdle={daysIdle}
+            openUpsolve={openUpsolve}
             weakestTag={weakestTag}
           />
           <ShareButton

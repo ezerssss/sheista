@@ -19,6 +19,10 @@ export function getMood(ctx: MoodContext): MoodId {
   }
   if (activeTraining) return "focused";
 
+  // Been away a few days: greet warmly, no guilt. Checked before urgent/
+  // nudging so the return visit never opens with a scolding.
+  if (!state.streak.todayDone && state.daysIdle >= 3) return "comeback";
+
   if (
     !state.streak.todayDone &&
     state.streak.current >= 1 &&
@@ -33,8 +37,8 @@ export function getMood(ctx: MoodContext): MoodId {
   if (state.akRate >= 60 && state.avgRecentPerf >= 80) return "proud";
 
   if (
-    state.lastFinishedAt &&
-    Date.now() - new Date(state.lastFinishedAt).getTime() > 48 * 3600_000
+    state.lastPracticeAt &&
+    Date.now() - new Date(state.lastPracticeAt).getTime() > 48 * 3600_000
   ) {
     return "sleepy";
   }
@@ -56,9 +60,9 @@ const MESSAGES: Record<MoodId, ReadonlyArray<MessageVariant>> = {
     { kind: "text", text: "the queue awaits." },
     { kind: "text", text: "imagine skipping today." },
     { kind: "text", text: "one round. four problems. easy day." },
-    { kind: "text", text: "i didn't level up for nothing." },
+    { kind: "text", text: "short on time? one problem still counts." },
     { kind: "text", text: "your streak isn't going to defend itself." },
-    { kind: "text", text: "feed me a round, would you?" },
+    { kind: "text", text: "feed me a round. or a bite. i'm not picky." },
   ],
   urgent: [
     { kind: "text", text: "midnight's close. streak's on the line." },
@@ -111,6 +115,13 @@ const MESSAGES: Record<MoodId, ReadonlyArray<MessageVariant>> = {
     { kind: "text", text: "that one problem is haunting us." },
     { kind: "text", text: "let's clean up the gate first." },
     { kind: "text", text: "upsolve, then forward." },
+  ],
+  comeback: [
+    { kind: "text", text: "hey. good to see you." },
+    { kind: "text", text: "we start small today. one problem." },
+    { kind: "text", text: "the ladder kept your spot." },
+    { kind: "text", text: "no makeup work. just today." },
+    { kind: "text", text: "missed you. the problems didn't go anywhere." },
   ],
 };
 
@@ -207,5 +218,7 @@ export function moodVisuals(mood: MoodId): {
       return { eyes: "shut", mouth: "yawn", particle: "zzz", bodyTint: "muted", overlay: "none" };
     case "worried":
       return { eyes: "squint", mouth: "flat", particle: "sweat", bodyTint: "default", overlay: "idle-bob" };
+    case "comeback":
+      return { eyes: "open", mouth: "smile", particle: "sparkle", bodyTint: "bright", overlay: "idle-bob" };
   }
 }

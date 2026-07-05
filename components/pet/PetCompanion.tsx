@@ -106,16 +106,25 @@ export function PetCompanion() {
       setActive(null);
       void refresh();
 
-      // No share suggestion when leveling down — read the room.
+      const isDaily = detail.kind === "daily";
+      // No share suggestion when leveling down — read the room. For daily
+      // bites, strip the AK flag so only streak milestones can suggest a
+      // share (a one-problem day is not an "AK").
       const milestone =
         state && state.authenticated && detail.levelAfter >= detail.levelBefore
           ? detectMilestone(
               state.streak.current + (state.streak.todayDone ? 0 : 1),
-              detail,
+              isDaily ? { ...detail, isAk: false } : detail,
             )
           : null;
-      const text =
-        detail.levelAfter > detail.levelBefore
+      const DAILY_LINES = [
+        "light day. still counts.",
+        "one problem a day keeps the rust away.",
+        "bite logged. streak safe.",
+      ];
+      const text = isDaily
+        ? DAILY_LINES[Math.floor(Math.random() * DAILY_LINES.length)]
+        : detail.levelAfter > detail.levelBefore
           ? "AK?! +1 level. earned."
           : detail.levelAfter < detail.levelBefore
             ? "ouch. -1. shake it off."
@@ -156,6 +165,9 @@ export function PetCompanion() {
         akRate: state.akRate,
         avgRecentPerf: state.avgRecentPerf,
         lastFinishedAt: state.lastFinishedAt,
+        lastPracticeAt: state.lastPracticeAt,
+        daysIdle: state.daysIdle,
+        todayBiteDone: state.todayBiteDone,
         gateBlocked: state.gateBlocked,
         recentHeatmap: state.recentHeatmap,
         todayKey: state.todayKey,

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ArrowUp, ArrowDown, Zap, Frown, Trophy, X } from "lucide-react";
+import { ArrowUp, ArrowDown, Zap, Frown, Trophy, Timer, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { emitTrainingFinished } from "@/lib/pet/events";
 
@@ -126,6 +126,23 @@ export function PreviewPanel() {
         >
           <Frown className="h-3 w-3" />
           miss at min level
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          className="justify-start text-xs"
+          onClick={() =>
+            emitTrainingFinished({
+              kind: "daily",
+              isAk: true,
+              performance: 0,
+              levelBefore: 41,
+              levelAfter: 41,
+            })
+          }
+        >
+          <Timer className="h-3 w-3" />
+          daily bite finished
         </Button>
       </div>
     </div>

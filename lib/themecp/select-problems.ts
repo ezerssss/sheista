@@ -51,6 +51,90 @@ function pickRandomNew(pool: CodeforcesProblem[], chosen: Set<string>): Codeforc
   return null;
 }
 
+export type DailySource = "upsolve" | "weak-tag" | "random";
+
+export type DailyPick = {
+  problem: TrainingProblem;
+  source: DailySource;
+};
+
+type UpsolveLike = {
+  contest_id: number;
+  problem_index: string;
+  problem_name: string;
+  rating: number | null;
+  tags: string[];
+};
+
+/**
+ * Pick the single problem for a daily bite (~15 minutes).
+ *
+ * Priority:
+ *   (a) easiest unsolved item in the upsolve queue — light days quietly clear
+ *       the gate (queue items already solved on CF are skipped)
+ *   (b) weakest tag near targetRating: exact → ±100 → ±200
+ *   (c) anything unsolved near targetRating: exact → ±200
+ * Returns null when the pool has nothing usable (caller sends the user to
+ * /training to build a round manually).
+ */
+export function selectDailyProblem({
+  pool,
+  solvedKeys,
+  targetRating,
+  weakestTag,
+  openUpsolve,
+}: {
+  pool: CodeforcesProblem[];
+  solvedKeys: Set<string>;
+  targetRating: number;
+  weakestTag: string | null;
+  openUpsolve: UpsolveLike[];
+}): DailyPick | null {
+  const open = openUpsolve
+    .filter((u) => !solvedKeys.has(`${u.contest_id}_${u.problem_index}`))
+    .sort((a, b) => (a.rating ?? 0) - (b.rating ?? 0));
+  if (open.length > 0) {
+    const u = open[0];
+    return {
+      source: "upsolve",
+      problem: {
+        contestId: u.contest_id,
+        index: u.problem_index,
+        name: u.problem_name,
+        rating: u.rating ?? 0,
+        tags: u.tags,
+        url: `https://codeforces.com/contest/${u.contest_id}/problem/${u.problem_index}`,
+        solvedAt: null,
+        slot: 1,
+      },
+    };
+  }
+
+  const unsolved = pool.filter((p) => !solvedKeys.has(key(p)));
+  const none = new Set<string>();
+
+  if (weakestTag) {
+    const tagged = unsolved.filter((p) => p.tags.includes(weakestTag));
+    for (const spread of [0, 100, 200]) {
+      const cand = pickRandomNew(
+        tagged.filter((p) => Math.abs((p.rating ?? 0) - targetRating) <= spread),
+        none,
+      );
+      if (cand) return { source: "weak-tag", problem: toTrainingProblem(cand, 1) };
+    }
+  }
+
+  for (const spread of [0, 200]) {
+    const cand = pickRandomNew(
+      unsolved.filter((p) => Math.abs((p.rating ?? 0) - targetRating) <= spread),
+      none,
+    );
+    if (cand) return { source: "random", problem: toTrainingProblem(cand, 1) };
+  }
+
+  return null;
+}
+
 /**
  * ThemeCP-faithful round selector.
  *
