@@ -16,22 +16,23 @@ export default async function PastRoundPage({
   } = await supabase.auth.getUser();
   if (!user) redirect(`/auth/login?next=/round/${id}`);
 
-  const { data: training } = await supabase
-    .from("trainings")
-    .select(
-      "id, started_at, ends_at, finished_at, performance, is_ak, level_at_start, level_at_end, tag_filter, training_problems(slot, contest_id, problem_index, problem_name, rating, tags, solved_at)",
-    )
-    .eq("id", id)
-    .eq("user_id", user.id)
-    .maybeSingle();
+  const [{ data: training }, { data: upsolved }] = await Promise.all([
+    supabase
+      .from("trainings")
+      .select(
+        "id, started_at, ends_at, finished_at, performance, is_ak, level_at_start, level_at_end, tag_filter, training_problems(slot, contest_id, problem_index, problem_name, rating, tags, solved_at)",
+      )
+      .eq("id", id)
+      .eq("user_id", user.id)
+      .maybeSingle(),
+    supabase
+      .from("upsolve_problems")
+      .select("contest_id, problem_index")
+      .eq("user_id", user.id)
+      .not("solved_at", "is", null),
+  ]);
 
   if (!training) notFound();
-
-  const { data: upsolved } = await supabase
-    .from("upsolve_problems")
-    .select("contest_id, problem_index")
-    .eq("user_id", user.id)
-    .not("solved_at", "is", null);
   const upsolvedSet = new Set(
     (upsolved ?? []).map((u) => `${u.contest_id}_${u.problem_index}`),
   );

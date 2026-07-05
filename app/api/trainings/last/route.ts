@@ -12,7 +12,7 @@ export async function GET() {
       "id, started_at, finished_at, is_ak, training_problems(slot, contest_id, problem_index, problem_name, rating, solved_at)",
     )
     .eq("user_id", user.id)
-    .order("started_at", { ascending: false })
+    .order("finished_at", { ascending: false })
     .limit(1);
 
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });

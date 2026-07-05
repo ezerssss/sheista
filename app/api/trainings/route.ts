@@ -72,7 +72,7 @@ export async function POST(request: Request) {
     .from("trainings")
     .select("training_problems(contest_id, problem_index, rating, solved_at)")
     .eq("user_id", user.id)
-    .order("started_at", { ascending: false })
+    .order("finished_at", { ascending: false })
     .limit(1);
 
   const prev = prevTrainings?.[0] as { training_problems?: PrevProblem[] } | undefined;

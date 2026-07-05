@@ -1,5 +1,3 @@
-import { toPng } from "html-to-image";
-
 type ExportOpts = {
   width: number;
   height: number;
@@ -9,6 +7,8 @@ export async function exportNodeToBlob(
   node: HTMLElement,
   opts: ExportOpts,
 ): Promise<Blob> {
+  // Loaded on demand so html-to-image stays out of the main bundle.
+  const { toPng } = await import("html-to-image");
   if (document.fonts && document.fonts.ready) {
     try {
       await document.fonts.ready;

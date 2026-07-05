@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Play, ArrowRight, AlertTriangle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useAllProblems, useSolvedProblems } from "@/hooks/useProblems";
 import { getLevel, ratingsOfLevel } from "@/lib/themecp/levels";
 import { selectRoundProblems } from "@/lib/themecp/select-problems";
@@ -258,15 +259,21 @@ export function SmartCTA({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <Button
-        onClick={quickStart}
-        disabled={poolLoading || starting}
-        size="lg"
-        data-pet-perch="primary"
-      >
-        <Play className="h-4 w-4" />
-        {todayDone ? "Do another round" : "Start today's round"}
-      </Button>
+      {poolLoading ? (
+        // Problem pool still streaming in from Codeforces — show a skeleton
+        // instead of a dead-looking disabled button.
+        <Skeleton className="h-11 w-[190px] rounded-md" />
+      ) : (
+        <Button
+          onClick={quickStart}
+          disabled={starting}
+          size="lg"
+          data-pet-perch="primary"
+        >
+          <Play className="h-4 w-4" />
+          {todayDone ? "Do another round" : "Start today's round"}
+        </Button>
+      )}
       <Button asChild variant="ghost" size="lg">
         <Link href="/training">Customize</Link>
       </Button>

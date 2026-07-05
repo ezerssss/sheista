@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { RefreshCw, Square, Check, ArrowRight, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { CountdownTimer } from "@/components/CountdownTimer";
 import { useSolvedProblems } from "@/hooks/useProblems";
+import { useCfSubmissionPolling } from "@/hooks/useCfSubmissionPolling";
 import { computePerformance } from "@/lib/themecp/performance";
 import {
   type ActiveTraining,
@@ -16,7 +17,6 @@ import {
 } from "@/lib/themecp/active-training";
 import { emitTrainingFinished } from "@/lib/pet/events";
 import { cn } from "@/lib/utils";
-import type { CodeforcesSubmission } from "@/types/themecp";
 
 export function RoundRoom({ handle }: { handle: string }) {
   const router = useRouter();
@@ -53,40 +53,34 @@ export function RoundRoom({ handle }: { handle: string }) {
     if (training && !roundOver) persistActiveTraining(training);
   }, [training, roundOver]);
 
-  // Auto-detect AK polling.
-  const pollRef = useRef<number | null>(null);
+  // Auto-detect AK polling. The hook owns the interval + error state; this
+  // component just folds fresh submissions into the round.
+  const {
+    submissions,
+    error: pollError,
+    refresh: refreshSubmissions,
+  } = useCfSubmissionPolling(handle, { enabled: !!training && !roundOver });
   useEffect(() => {
-    if (!training) return;
-    const tick = async () => {
-      try {
-        const res = await fetch(`/api/cf/submissions/${encodeURIComponent(handle)}?count=50`);
-        const json = await res.json();
-        if (!json.ok) return;
-        const subs = json.submissions as CodeforcesSubmission[];
-        setTraining((prev) => {
-          if (!prev) return prev;
-          const updatedProblems = prev.problems.map((p) => {
-            if (p.solvedAt) return p;
-            const okSub = subs.find(
-              (s) =>
-                s.verdict === "OK" &&
-                s.problem.contestId === p.contestId &&
-                s.problem.index === p.index &&
-                s.creationTimeSeconds * 1000 >= prev.startTime,
-            );
-            return okSub ? { ...p, solvedAt: okSub.creationTimeSeconds * 1000 } : p;
-          });
-          return { ...prev, problems: updatedProblems };
-        });
-      } catch {}
-    };
-    void tick();
-    pollRef.current = window.setInterval(tick, 30_000);
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-      pollRef.current = null;
-    };
-  }, [training, handle]);
+    if (!submissions) return;
+    setTraining((prev) => {
+      if (!prev) return prev;
+      let changed = false;
+      const updatedProblems = prev.problems.map((p) => {
+        if (p.solvedAt) return p;
+        const okSub = submissions.find(
+          (s) =>
+            s.verdict === "OK" &&
+            s.problem.contestId === p.contestId &&
+            s.problem.index === p.index &&
+            s.creationTimeSeconds * 1000 >= prev.startTime,
+        );
+        if (!okSub) return p;
+        changed = true;
+        return { ...p, solvedAt: okSub.creationTimeSeconds * 1000 };
+      });
+      return changed ? { ...prev, problems: updatedProblems } : prev;
+    });
+  }, [submissions]);
 
   // Auto-finish on AK. Hold the user in-room (navigate:false) so the
   // level-up overlay has time to render — they'll click "View results" to go
@@ -100,31 +94,6 @@ export function RoundRoom({ handle }: { handle: string }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [training?.problems, roundOver]);
-
-  const refreshSubmissions = async () => {
-    if (!training) return;
-    const res = await fetch(`/api/cf/submissions/${encodeURIComponent(handle)}?count=50`);
-    const json = await res.json();
-    if (!json.ok) return;
-    const subs = json.submissions as CodeforcesSubmission[];
-    setTraining((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        problems: prev.problems.map((p) => {
-          if (p.solvedAt) return p;
-          const okSub = subs.find(
-            (s) =>
-              s.verdict === "OK" &&
-              s.problem.contestId === p.contestId &&
-              s.problem.index === p.index &&
-              s.creationTimeSeconds * 1000 >= prev.startTime,
-          );
-          return okSub ? { ...p, solvedAt: okSub.creationTimeSeconds * 1000 } : p;
-        }),
-      };
-    });
-  };
 
   const finish = async (autoAk: boolean, opts: { navigate?: boolean } = {}) => {
     if (!training || finishing) return;
@@ -221,6 +190,9 @@ export function RoundRoom({ handle }: { handle: string }) {
           Auto-detect every 30 s. Submissions go through Codeforces — opening each problem in a new
           tab.
         </p>
+        {pollError && !roundOver && (
+          <p className="text-xs text-amber-500/80">{pollError}</p>
+        )}
       </header>
 
       <section className="space-y-4">
