@@ -2,7 +2,7 @@
 
 Personal [ThemeCP](https://codeforces.com/blog/entry/136704) inspired competitive programming training tracker for Codeforces.
 
-🏷️ **Status:** Active
+🏷️ **Status:** Active \
 🤖 **Vibe Coded:** Yes
 
 ---
